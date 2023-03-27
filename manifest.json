@@ -1,0 +1,18 @@
+{
+  "author": "Dara Oladosu",
+  "content_scripts": [
+    {
+      "matches": ["https://*.twitter.com/*", "https://twitter.com/*"],
+      "js": ["index.js"]
+    }
+  ],
+  "description": "Block users on Twitter in one click instead of 3.",
+  "icons": {
+    "48": "images/one-click-blocker.png"
+  },
+  "manifest_version": 3,
+  "name": "1-click blocker for Twitter",
+  "offline_enabled": true,
+  "short_name": "Twitter 1-click blocker",
+  "version": "1.0.1"
+}
