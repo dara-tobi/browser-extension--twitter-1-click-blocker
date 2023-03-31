@@ -76,6 +76,26 @@ let hideCaretMenu = mutation => {
   }
 }
 
+// hide an element with CSS
+let hideElement = element => {
+  if (!element) {
+    return;
+  }
+  element.style.height = '0px';
+  element.style.visibility = 'hidden';
+}
+
+// hide the thank you message that pops up after you block a user
+let temporarilyHideTwitterThankYouMessage = mutation => {
+  // get the string of the mutation
+  let mutationString = ('mutation', Array.from(mutation.addedNodes).map(node => node.outerHTML).join(''));
+  // if the mutation contains the thank you message, hide it
+  if (mutationString.includes('Twitter will use this to make your timeline better.')) {
+    let tweetWrapper = mutation.target.closest('[data-testid="cellInnerDiv"]');
+    hideElement(tweetWrapper);
+  }
+}
+
 // create mutation observer to detect when new nodes are added to the DOM
 let initAndCreateMutationObserver = () => {
   let mutationObserver = new MutationObserver(mutations => {
@@ -85,6 +105,7 @@ let initAndCreateMutationObserver = () => {
           clickConfirmUserBlock(mutation);
           hideCaretMenu(mutation);
           getTweetWrapperAndAttachBlockButton(mutation);
+          temporarilyHideTwitterThankYouMessage(mutation);
         }
     });
   });
@@ -154,11 +175,17 @@ let triggerBlockMenuOptionClick = () => {
   }, 20);
 }
 
+let hideTweetDiv = caret => {
+  let tweetDiv = caret.closest('article');
+  hideElement(tweetDiv);
+}
+
 // add event listeners to the block button
 let addBlockButtonEventListeners = (blockButton, caret) => {
   blockButton.addEventListener('click', e => {
     e.stopPropagation();
     triggerMenuclick(caret);
+    hideTweetDiv(caret);
     triggerBlockMenuOptionClick(caret)
   });
 }
