@@ -100,13 +100,13 @@ let temporarilyHideTwitterThankYouMessage = mutation => {
 let initAndCreateMutationObserver = () => {
   let mutationObserver = new MutationObserver(mutations => {
     mutations.forEach(mutation => {
-        if (mutation.addedNodes.length > 0) {
-          setUsername();
-          clickConfirmUserBlock(mutation);
-          hideCaretMenu(mutation);
-          getTweetWrapperAndAttachBlockButton(mutation);
-          temporarilyHideTwitterThankYouMessage(mutation);
-        }
+      if (mutation.addedNodes.length > 0) {
+        setUsername();
+        clickConfirmUserBlock(mutation);
+        hideCaretMenu(mutation);
+        getTweetWrapperAndAttachBlockButton(mutation);
+        temporarilyHideTwitterThankYouMessage(mutation);
+      }
     });
   });
 
