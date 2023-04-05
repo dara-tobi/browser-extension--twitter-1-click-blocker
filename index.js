@@ -124,10 +124,7 @@ let createBlockButton = () => {
   blockButton.style.cursor = 'pointer';
   blockButton.style.textAlign = 'center';
   blockButton.style.borderRadius = '5px';
-  blockButton.style.marginLeft = '7px';
-  if (window.location.pathname.includes('status')) {
-    blockButton.style.marginTop = '5px';
-  }
+  blockButton.style.marginRight = '20px';
   blockButton.addEventListener('mouseenter', () => {
     blockButton.style.fontSize = '.9em';
   });
@@ -195,7 +192,8 @@ let attachBlockButton = (userNameDiv, caret) => {
   if (shouldAddBlockButton(userNameDiv)) {
     let blockButton = createBlockButton();
     addBlockButtonEventListeners(blockButton, caret);
-    userNameDiv.appendChild(blockButton);
+    let caretWrapper = caret.parentElement;
+    caretWrapper.insertBefore(blockButton, caret);
   }
 }
 
