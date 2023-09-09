@@ -90,7 +90,7 @@ let temporarilyHideTwitterThankYouMessage = mutation => {
   // get the string of the mutation
   let mutationString = ('mutation', Array.from(mutation.addedNodes).map(node => node.outerHTML).join(''));
   // if the mutation contains the thank you message, hide it
-  if (mutationString.includes('Twitter will use this to make your timeline better.')) {
+  if (mutationString.includes('X will use this to make your timeline better.')) {
     let tweetWrapper = mutation.target.closest('[data-testid="cellInnerDiv"]');
     hideElement(tweetWrapper);
   }
