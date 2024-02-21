@@ -96,6 +96,51 @@ let temporarilyHideTwitterThankYouMessage = mutation => {
   }
 }
 
+let addBlockButtonToProfilePage = mutation => {
+  let isProfilePage = null;
+  let isOwnProfilePage = null;
+  let userActionsButton = null;
+
+  if (!!document.querySelector(`[data-testid="UserAvatar-Container-${location.href.split('/')[3]}"]`)) {
+    isProfilePage = true;
+  }
+
+  if (document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')?.querySelector('[tabindex]')?.textContent?.split('@')?.[1] == location.href.split('/')[3]) {
+    isOwnProfilePage = true;
+  }
+
+  if (isProfilePage && !isOwnProfilePage) {
+  } else {
+    return null;
+  }
+
+  // check if this is the user actions button
+  if (mutation.target.querySelector('[data-testid="userActions"]')) {
+    userActionsButton = mutation.target.querySelector('[data-testid="userActions"]');
+  }
+
+  if (!userActionsButton) {
+    return null;
+  }
+
+  if (userActionsButton) {//} && !mutation.target.querySelector('[data-testid="blockButton"]')) {
+    if (mutation.target.querySelector('.sw-block-button')) {
+      return null;
+    }
+
+    let blockButton = createProfileBlockButton();
+    let userActionsButtonContainer = userActionsButton.parentElement;
+    userActionsButtonContainer.appendChild(blockButton);
+    // add class to block button so we can detect it later
+    blockButton.classList.add('sw-block-button');
+
+    blockButton.addEventListener('click', () => {
+      userActionsButton.click();
+      triggerBlockMenuOptionClick();
+    });
+  }
+}
+
 // create mutation observer to detect when new nodes are added to the DOM
 let initAndCreateMutationObserver = () => {
   let mutationObserver = new MutationObserver(mutations => {
@@ -106,6 +151,7 @@ let initAndCreateMutationObserver = () => {
         hideCaretMenu(mutation);
         getTweetWrapperAndAttachBlockButton(mutation);
         temporarilyHideTwitterThankYouMessage(mutation);
+        addBlockButtonToProfilePage(mutation);
       }
     });
   });
@@ -140,6 +186,40 @@ let createBlockButton = () => {
   return blockButton;
 }
 
+let createProfileBlockButton = () => {
+  let blockButton = document.createElement('div');
+
+  blockButton.style.padding = '7px 14px';
+  blockButton.style.cursor = 'pointer';
+  blockButton.style.textAlign = 'center';
+  blockButton.style.borderRadius = '5px';
+  blockButton.addEventListener('mouseenter', () => {
+    blockButton.style.fontSize = '18px';
+  });
+  blockButton.addEventListener('mouseleave', () => {
+    blockButton.style.fontSize = '15px';
+  });
+  blockButton.style.backgroundColor = 'mistyrose';
+  blockButton.style.transition = 'font-size 0.2s ease-in';
+  blockButton.style.border = '0 solid black';
+  blockButton.style.boxSizing = 'border-box';
+  blockButton.style.display = 'flex';
+  blockButton.style.flexBasis = 'auto';
+  blockButton.style.flexDirection = 'column';
+  blockButton.style.flexShrink = 0;
+  blockButton.style.listStyle = 'none';
+  blockButton.style.position = 'relative';
+  blockButton.style.textDecoration = 'none';
+  blockButton.style.zIndex = 0;
+  blockButton.textContent = '🚫';
+  blockButton.style.marginLeft = '5px';
+  blockButton.style.marginBottom = '12px';
+
+  blockButton.style.width = '50px';
+  blockButton.style.height = '35px';
+
+  return blockButton;
+}
 // check if we should add the block button to the tweet
 let shouldAddBlockButton = userNameDiv => {
   if (!userNameDiv) {
