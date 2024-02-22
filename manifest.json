@@ -1,5 +1,8 @@
 {
   "author": "Dara Oladosu",
+  "background": {
+    "service_worker": "service-worker.js"
+  },
   "content_scripts": [
     {
       "matches": ["https://*.twitter.com/*", "https://twitter.com/*"],
@@ -13,6 +16,8 @@
   "manifest_version": 3,
   "name": "1-click blocker for Twitter",
   "offline_enabled": true,
+  "permissions": ["tabs", "webRequest"],
+  "host_permissions": ["*://*.twitter.com/*"],
   "short_name": "Twitter 1-click blocker",
-  "version": "1.0.4"
+  "version": "1.0.5"
 }

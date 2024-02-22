@@ -2,65 +2,91 @@ let isBlockClicked = false;
 let ownUsername = null;
 
 // click the confirm button on the block confirmation modal
-let clickConfirmUserBlock = mutation => {
-  if (!mutation.target.querySelector('[data-testid="confirmationSheetConfirm"]')?.classList?.contains('sw-block-button')) {
+let clickConfirmUserBlock = (mutation) => {
+  if (
+    !mutation.target
+      .querySelector('[data-testid="confirmationSheetConfirm"]')
+      ?.classList?.contains("sw-block-button")
+  ) {
     // add a custom class to prevent this from being clicked twice
-    mutation.target.querySelector('[data-testid="confirmationSheetConfirm"]')?.classList?.add('sw-block-button');
+    mutation.target
+      .querySelector('[data-testid="confirmationSheetConfirm"]')
+      ?.classList?.add("sw-block-button");
     // click the confirm block button
-    mutation.target.querySelector('[data-testid="confirmationSheetConfirm"]')?.click();
+    mutation.target
+      .querySelector('[data-testid="confirmationSheetConfirm"]')
+      ?.click();
   }
-}
+};
 
 // set username so we can know not to add block button to the user's own tweets
 let setUsername = () => {
   if (!ownUsername) {
-    ownUsername = document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')?.querySelector('[tabindex]')?.textContent;
+    ownUsername = document
+      .querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')
+      ?.querySelector("[tabindex]")?.textContent;
   }
-}
+};
 
 // detect the div that contains the username and caret, so we can attach the block button and event listeners
-let detectTweetUsernameWrapper = mutation => {
+let detectTweetUsernameWrapper = (mutation) => {
   let nodeOfInterest = null;
-  let mutationString = ('mutation', Array.from(mutation.addedNodes).map(node => node.outerHTML).join(''));
+  let mutationString =
+    ("mutation",
+    Array.from(mutation.addedNodes)
+      .map((node) => node.outerHTML)
+      .join(""));
   if (mutationString.includes('data-testid="caret"')) {
-    mutation.addedNodes.forEach(node => {
-      if (node.querySelector('[data-testid="caret"]') && node.closest('article')) {
+    mutation.addedNodes.forEach((node) => {
+      if (
+        node.querySelector('[data-testid="caret"]') &&
+        node.closest("article")
+      ) {
         let parentElement = node.parentElement;
         while (!parentElement.querySelector('[data-testid="User-Name"]')) {
-          if (parentElement.nodeName.toLowerCase() == 'article') {
+          if (parentElement.nodeName.toLowerCase() == "article") {
             break;
           }
           parentElement = parentElement.parentElement;
         }
-        let userNameDiv = parentElement.querySelector('[data-testid="User-Name"]')
+        let userNameDiv = parentElement.querySelector(
+          '[data-testid="User-Name"]'
+        );
         if (userNameDiv) {
           nodeOfInterest = parentElement;
           return;
         }
       }
 
-      if (node.getAttribute('data-testid') == 'cellInnerDiv') {
+      if (node.getAttribute("data-testid") == "cellInnerDiv") {
         nodeOfInterest = node;
       }
-    })
+    });
   }
   return nodeOfInterest;
-}
+};
 
 // get the tweet wrapper and attach the block button
-let getTweetWrapperAndAttachBlockButton = mutation => {
+let addBlockButtonsToTimelines = (mutation) => {
   let usernameDivWrapper = detectTweetUsernameWrapper(mutation);
   if (usernameDivWrapper) {
-    let usernameDiv = usernameDivWrapper.querySelector('[data-testid="User-Name"]');
+    let usernameDiv = usernameDivWrapper.querySelector(
+      '[data-testid="User-Name"]'
+    );
     let caret = usernameDivWrapper.querySelector('[data-testid="caret"]');
     attachBlockButton(usernameDiv, caret);
   }
-}
+};
 
 // hide the menu that pops up when you click the caret
-let hideCaretMenu = mutation => {
-  if (mutation.target.querySelector('[role="menu"]') && !mutation.target.querySelector('[role="menu"]').classList.contains('sw-menu')) {
-    mutation.target.querySelector('[role="menu"]').classList.add('sw-menu');
+let hideCaretMenu = (mutation) => {
+  if (
+    mutation.target.querySelector('[role="menu"]') &&
+    !mutation.target
+      .querySelector('[role="menu"]')
+      .classList.contains("sw-menu")
+  ) {
+    mutation.target.querySelector('[role="menu"]').classList.add("sw-menu");
     if (isBlockClicked) {
       let blockButton = document.querySelector('[data-testid="block"]');
       if (blockButton) {
@@ -74,57 +100,84 @@ let hideCaretMenu = mutation => {
       mutation.target.querySelector('[role="menu"]').style.opacity = 1;
     }
   }
-}
+};
 
 // hide an element with CSS
-let hideElement = element => {
+let hideElement = (element) => {
   if (!element) {
     return;
   }
-  element.style.height = '0px';
-  element.style.visibility = 'hidden';
-}
+  element.style.height = "0px";
+  element.style.visibility = "hidden";
+};
 
 // hide the thank you message that pops up after you block a user
-let temporarilyHideTwitterThankYouMessage = mutation => {
+let temporarilyHideTwitterThankYouMessage = (mutation) => {
   // get the string of the mutation
-  let mutationString = ('mutation', Array.from(mutation.addedNodes).map(node => node.outerHTML).join(''));
+  let mutationString =
+    ("mutation",
+    Array.from(mutation.addedNodes)
+      .map((node) => node.outerHTML)
+      .join(""));
   // if the mutation contains the thank you message, hide it
-  if (mutationString.includes('X will use this to make your timeline better.')) {
+  if (
+    mutationString.includes("X will use this to make your timeline better.")
+  ) {
     let tweetWrapper = mutation.target.closest('[data-testid="cellInnerDiv"]');
     hideElement(tweetWrapper);
   }
-}
+};
 
-let addBlockButtonToProfilePage = mutation => {
+let addBlockButtonToProfilePage = (mutation) => {
   let isProfilePage = null;
   let isOwnProfilePage = null;
   let userActionsButton = null;
-
-  if (!!document.querySelector(`[data-testid="UserAvatar-Container-${location.href.split('/')[3]}"]`)) {
+  if (
+    !!document.querySelector(
+      `[data-testid="UserAvatar-Container-${location.pathname.split("/")[1]}"]`
+    )
+  ) {
     isProfilePage = true;
   }
 
-  if (document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')?.querySelector('[tabindex]')?.textContent?.split('@')?.[1] == location.href.split('/')[3]) {
+  if (
+    document
+      .querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')
+      ?.querySelector("[tabindex]")
+      ?.textContent?.split("@")?.[1] == location.pathname.split("/")[1]
+  ) {
     isOwnProfilePage = true;
   }
 
+  if (isOwnProfilePage) {
+    // when we navigate to our own profile page, from another profile page where there's a block button
+    // Twitter retains the button appended on that user's profile page, remove the block button from our own profile page
+    if (mutation.target.querySelector(".sw-block-button")) {
+      mutation.target.querySelector(".sw-block-button").remove();
+    }
+  }
+
   if (isProfilePage && !isOwnProfilePage) {
+    userActionsButton = mutation.target.querySelector(
+      '[data-testid="userActions"]'
+    );
   } else {
     return null;
   }
 
   // check if this is the user actions button
   if (mutation.target.querySelector('[data-testid="userActions"]')) {
-    userActionsButton = mutation.target.querySelector('[data-testid="userActions"]');
+    userActionsButton = mutation.target.querySelector(
+      '[data-testid="userActions"]'
+    );
   }
 
   if (!userActionsButton) {
     return null;
   }
 
-  if (userActionsButton) {//} && !mutation.target.querySelector('[data-testid="blockButton"]')) {
-    if (mutation.target.querySelector('.sw-block-button')) {
+  if (userActionsButton) {
+    if (mutation.target.querySelector(".sw-block-button")) {
       return null;
     }
 
@@ -132,26 +185,122 @@ let addBlockButtonToProfilePage = mutation => {
     let userActionsButtonContainer = userActionsButton.parentElement;
     userActionsButtonContainer.appendChild(blockButton);
     // add class to block button so we can detect it later
-    blockButton.classList.add('sw-block-button');
+    blockButton.classList.add("sw-block-button");
 
-    blockButton.addEventListener('click', () => {
+    blockButton.addEventListener("click", () => {
       userActionsButton.click();
       triggerBlockMenuOptionClick();
     });
-  }
-}
 
+    let urlParams = new URLSearchParams(window.location.search);
+    let block = urlParams.get("block");
+
+    if (block) {
+      blockButton.click();
+      triggerBlockMenuOptionClick();
+     
+      chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        // message received from background script
+        chrome.runtime.sendMessage(
+          {
+            type: "feedback",
+            data: "sending message to background script after receving one",
+          },
+          (response) => {
+            // console.log("response", response);
+          }
+        );
+      });
+    }
+  }
+};
+
+let sendBlockRequest = (username) => {
+  chrome.runtime.sendMessage(
+    { type: "open_tab", username, block: true },
+    (response) => {
+      // console.log("response", response);
+    }
+  );
+};
+
+let addBlockButtonsToEngagementsPages = (mutation) => {
+  // if we're not on the likes or retweets or followers or following or verified followers or followers you follow page, return
+  if (
+    !window.location.pathname.includes("/likes") &&
+    !window.location.pathname.includes("/retweets") &&
+    !window.location.pathname.includes("/followers") &&
+    !window.location.pathname.includes("/following") &&
+    !window.location.pathname.includes("/verified_followers") &&
+    !window.location.pathname.includes("/followers_you_follow") &&
+    !window.location.pathname.includes("/status")
+  ) {
+    return;
+  }
+
+  let followButtons = mutation.target.querySelectorAll(
+    '[data-testid*="-follow"]'
+  );
+
+  followButtons.forEach((followButton) => {
+    if (followButton.closest('[data-testid="HoverCard"]')) {
+      return;
+    }
+
+    if (
+      followButton &&
+      !followButton.parentElement.querySelector(".sw-block-button")
+    ) {
+      let blockButton = createProfileBlockButton("engagements-page");
+      followButton.parentElement.appendChild(blockButton);
+      followButton.parentElement.style.flexDirection = "row";
+      blockButton.classList.add("sw-block-button");
+      blockButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        let username = followButton
+          ?.getAttribute("aria-label")
+          ?.split("@")?.[1];
+
+        sendBlockRequest(username);
+      });
+    }
+  });
+};
+
+let informBackgroundScriptOfBlockCompletion = (mutation) => {
+  if (!location.href.includes("block=true")) {
+    return;
+  }
+
+  if (
+    mutation.target.querySelector('[data-testid="placementTracking"]')
+      ?.textContent == "Blocked"
+  ) {
+    let username = location.pathname.split("/")[1];
+    chrome.runtime.sendMessage(
+      { type: "feedback", data: "block_button_clicked", username },
+      (response) => {
+        // console.log("response", response);
+      }
+    );
+  }
+};
 // create mutation observer to detect when new nodes are added to the DOM
 let initAndCreateMutationObserver = () => {
-  let mutationObserver = new MutationObserver(mutations => {
-    mutations.forEach(mutation => {
+  let mutationObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
       if (mutation.addedNodes.length > 0) {
         setUsername();
         clickConfirmUserBlock(mutation);
         hideCaretMenu(mutation);
-        getTweetWrapperAndAttachBlockButton(mutation);
+        addBlockButtonsToTimelines(mutation);
         temporarilyHideTwitterThankYouMessage(mutation);
         addBlockButtonToProfilePage(mutation);
+        addBlockButtonsToEngagementsPages(mutation);
+        informBackgroundScriptOfBlockCompletion(mutation);
       }
     });
   });
@@ -159,88 +308,103 @@ let initAndCreateMutationObserver = () => {
   mutationObserver.observe(document.body, {
     childList: true,
     subtree: true,
-    attributes: false
+    attributes: false,
   });
-}
+};
 
 // create block button
 let createBlockButton = () => {
-  let blockButton = document.createElement('div');
-  blockButton.style.padding = '7px 14px';
-  blockButton.style.cursor = 'pointer';
-  blockButton.style.textAlign = 'center';
-  blockButton.style.borderRadius = '5px';
-  blockButton.style.marginRight = '20px';
-  blockButton.addEventListener('mouseenter', () => {
-    blockButton.style.fontSize = '.9em';
+  let blockButton = document.createElement("div");
+  blockButton.style.cursor = "pointer";
+  blockButton.style.textAlign = "center";
+  blockButton.style.borderRadius = "5px";
+  blockButton.style.marginRight = "20px";
+  blockButton.addEventListener("mouseenter", () => {
+    blockButton.style.fontSize = ".9em";
   });
-  blockButton.addEventListener('mouseleave', () => {
-    blockButton.style.fontSize = '0.6em';
+  blockButton.addEventListener("mouseleave", () => {
+    blockButton.style.fontSize = "0.6em";
   });
-  blockButton.style.backgroundColor = 'mistyrose';
-  blockButton.style.lineHeight = '10px';
-  blockButton.style.width = '12px';
-  blockButton.style.fontSize = '0.6em';
-  blockButton.textContent = '🚫';
-  blockButton.style.transition = 'font-size 0.2s ease-in';
-  return blockButton;
-}
-
-let createProfileBlockButton = () => {
-  let blockButton = document.createElement('div');
-
-  blockButton.style.padding = '7px 14px';
-  blockButton.style.cursor = 'pointer';
-  blockButton.style.textAlign = 'center';
-  blockButton.style.borderRadius = '5px';
-  blockButton.addEventListener('mouseenter', () => {
-    blockButton.style.fontSize = '18px';
-  });
-  blockButton.addEventListener('mouseleave', () => {
-    blockButton.style.fontSize = '15px';
-  });
-  blockButton.style.backgroundColor = 'mistyrose';
-  blockButton.style.transition = 'font-size 0.2s ease-in';
-  blockButton.style.border = '0 solid black';
-  blockButton.style.boxSizing = 'border-box';
-  blockButton.style.display = 'flex';
-  blockButton.style.flexBasis = 'auto';
-  blockButton.style.flexDirection = 'column';
-  blockButton.style.flexShrink = 0;
-  blockButton.style.listStyle = 'none';
-  blockButton.style.position = 'relative';
-  blockButton.style.textDecoration = 'none';
-  blockButton.style.zIndex = 0;
-  blockButton.textContent = '🚫';
-  blockButton.style.marginLeft = '5px';
-  blockButton.style.marginBottom = '12px';
-
-  blockButton.style.width = '50px';
-  blockButton.style.height = '35px';
+  blockButton.style.backgroundColor = "mistyrose";
+  blockButton.style.lineHeight = "10px";
+  blockButton.style.width = "12px";
+  blockButton.style.fontSize = "0.6em";
+  blockButton.textContent = "🚫";
+  blockButton.style.transition = "font-size 0.2s ease-in";
+  blockButton.style.boxSizing = "border-box";
+  blockButton.style.display = "flex";
+  blockButton.style.alignItems = "center";
+  blockButton.style.justifyContent = "center";
+  blockButton.style.placeSelf = "center";
+  blockButton.style.height = "25px";
+  blockButton.style.width = "40px";
 
   return blockButton;
-}
+};
+
+let createProfileBlockButton = (page) => {
+  let blockButton = document.createElement("div");
+
+  blockButton.style.cursor = "pointer";
+  blockButton.style.textAlign = "center";
+  blockButton.style.borderRadius = "5px";
+  blockButton.addEventListener("mouseenter", () => {
+    blockButton.style.fontSize = "0.9em";
+  });
+  blockButton.addEventListener("mouseleave", () => {
+    blockButton.style.fontSize = "0.6em";
+  });
+  blockButton.style.fontSize = "0.6em";
+  blockButton.style.backgroundColor = "mistyrose";
+  blockButton.style.transition = "font-size 0.2s ease-in";
+
+  blockButton.style.boxSizing = "border-box";
+  blockButton.style.display = "flex";
+ 
+  blockButton.style.alignItems = "center";
+  blockButton.style.justifyContent = "center";
+  blockButton.style.placeSelf = "center";
+  blockButton.textContent = "🚫";
+  blockButton.style.marginLeft = "5px";
+
+  if (page !== "engagements-page") {
+    blockButton.style.marginBottom = "12px";
+  }
+  blockButton.style.width = "40px";
+  blockButton.style.height = "25px";
+
+  return blockButton;
+};
 // check if we should add the block button to the tweet
-let shouldAddBlockButton = userNameDiv => {
+let shouldAddBlockButton = (userNameDiv) => {
   if (!userNameDiv) {
     return false;
   }
-  let tweetUsername = userNameDiv.querySelectorAll('[href]')?.[1]?.textContent;
+  let tweetUsername = userNameDiv.querySelectorAll("[href]")?.[1]?.textContent;
   // don't add block buttons to the user's own tweets; don't add block buttons to the home page
-  if (tweetUsername !== ownUsername && !window.location.pathname.includes('/home')) {
+  if (
+    tweetUsername !== ownUsername &&
+    !window.location.pathname.includes("/home")
+  ) {
     return true;
   }
-}
+};
 
 // trigger the click event on the caret
-let triggerMenuclick = caret => {
+let triggerMenuclick = (caret) => {
   // set isBlockClicked to true so that we know this feature is currently active
   isBlockClicked = true;
   caret.click();
-}
+};
 
 // trigger the click event on the block menu option
 let triggerBlockMenuOptionClick = () => {
+  chrome.runtime.sendMessage(
+    { type: "feedback", data: "trying to click block button" },
+    (response) => {
+      // console.log("response", response);
+    }
+  );
   setTimeout(() => {
     let blockButton = document.querySelector('[data-testid="block"]');
     // set isBlockClicked to false so that this feature is no longer active and doesn't interfere with other features
@@ -250,22 +414,22 @@ let triggerBlockMenuOptionClick = () => {
     }
     blockButton?.click();
   }, 20);
-}
+};
 
-let hideTweetDiv = caret => {
-  let tweetDiv = caret.closest('article');
+let hideTweetDiv = (caret) => {
+  let tweetDiv = caret.closest("article");
   hideElement(tweetDiv);
-}
+};
 
 // add event listeners to the block button
 let addBlockButtonEventListeners = (blockButton, caret) => {
-  blockButton.addEventListener('click', e => {
+  blockButton.addEventListener("click", (e) => {
     e.stopPropagation();
     triggerMenuclick(caret);
     hideTweetDiv(caret);
-    triggerBlockMenuOptionClick(caret)
+    triggerBlockMenuOptionClick(caret);
   });
-}
+};
 
 // attach the block button to the tweet
 let attachBlockButton = (userNameDiv, caret) => {
@@ -275,7 +439,17 @@ let attachBlockButton = (userNameDiv, caret) => {
     let caretWrapper = caret.parentElement;
     caretWrapper.insertBefore(blockButton, caret);
   }
-}
+};
 
 // initialize the app; create mutation observer
 initAndCreateMutationObserver();
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // message received from background script
+  if (message.type == "finished_blocking") {
+    // get the username of the user that was blocked
+    let username = message.username;
+    let blockedUserWrapper = document.querySelector(`[href="/${username}"]`).closest('[data-testid="cellInnerDiv"]');
+    blockedUserWrapper.remove();
+  }
+});
