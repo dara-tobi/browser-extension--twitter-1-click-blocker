@@ -449,7 +449,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type == "finished_blocking") {
     // get the username of the user that was blocked
     let username = message.username;
-    let blockedUserWrapper = document.querySelector(`[href="/${username}"]`).closest('[data-testid="cellInnerDiv"]');
+    let blockedUserWrapper = document.querySelector(`[href="/${username}"]`).closest('[data-testid="UserCell"]');
     blockedUserWrapper.remove();
   }
 });
