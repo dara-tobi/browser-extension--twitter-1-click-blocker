@@ -1,23 +1,27 @@
 let isBlockClicked = false;
 let ownUsername = null;
 let somethingWentWrong = false;
+let usernameToBlock = null;
 
 // click the confirm button on the block confirmation modal
 let clickConfirmUserBlock = (mutation) => {
   if (
     !mutation.target
       .querySelector('[data-testid="confirmationSheetConfirm"]')
-      ?.classList?.contains("sw-block-button")
+      ?.classList?.contains("sw-block-button-clicked")
   ) {
     // add a custom class to prevent this from being clicked twice
     mutation.target
       .querySelector('[data-testid="confirmationSheetConfirm"]')
-      ?.classList?.add("sw-block-button");
-    
-    let blockConfirmationButton = mutation.target.querySelector('[data-testid="confirmationSheetConfirm"]');
-    if (blockConfirmationButton && blockConfirmationButton.textContent.toLowerCase() == "block") {
-      // click the confirm block button
-      blockConfirmationButton.click();
+      ?.classList?.add("sw-block-button-clicked");
+
+    let blockConfirmationBlockButton = mutation.target.querySelector('[data-testid="confirmationSheetConfirm"]');
+    let confirmationSheetDialog = mutation.target.querySelector('[data-testid="confirmationSheetDialog"]');
+    let doesConfirmationDialogContainUsernameToBlock = confirmationSheetDialog?.textContent?.toLowerCase()?.includes(usernameToBlock.toLowerCase());
+
+    if (blockConfirmationBlockButton && doesConfirmationDialogContainUsernameToBlock) {
+      blockConfirmationBlockButton.click();
+      usernameToBlock = null;
     }
   }
 };
@@ -426,7 +430,7 @@ let initAndCreateMutationObserver = () => {
 };
 
 // create block button
-let createBlockButton = () => {
+let createBlockButton = (tweetUsername) => {
   let blockButton = document.createElement("div");
   blockButton.style.cursor = "pointer";
   blockButton.style.textAlign = "center";
@@ -451,6 +455,8 @@ let createBlockButton = () => {
   blockButton.style.placeSelf = "center";
   blockButton.style.height = "25px";
   blockButton.style.width = "40px";
+  // add username to the block button so we can use it later
+  blockButton.dataset.username = tweetUsername;
 
   return blockButton;
 };
@@ -489,11 +495,7 @@ let createProfileBlockButton = (page) => {
   return blockButton;
 };
 // check if we should add the block button to the tweet
-let shouldAddBlockButton = (userNameDiv) => {
-  if (!userNameDiv) {
-    return false;
-  }
-  let tweetUsername = userNameDiv.querySelectorAll("[href]")?.[1]?.textContent;
+let shouldAddBlockButton = (tweetUsername) => {
   // don't add block buttons to the user's own tweets
   if (
     tweetUsername !== ownUsername
@@ -518,13 +520,13 @@ let triggerBlockMenuOptionClick = () => {
     }
   );
   setTimeout(() => {
-    let blockButton = document.querySelector('[data-testid="block"]');
+    let blockMenuOptionsBlockOption = document.querySelector('[data-testid="block"]');
     // set isBlockClicked to false so that this feature is no longer active and doesn't interfere with other features
     isBlockClicked = false;
-    if (!blockButton) {
+    if (!blockMenuOptionsBlockOption) {
       return;
     }
-    blockButton?.click();
+    blockMenuOptionsBlockOption?.click();
   }, 20);
 };
 
@@ -536,6 +538,7 @@ let hideTweetDiv = (caret) => {
 // add event listeners to the block button
 let addBlockButtonEventListeners = (blockButton, caret) => {
   blockButton.addEventListener("click", (e) => {
+    usernameToBlock = blockButton.dataset.username;
     e.stopPropagation();
     triggerMenuclick(caret);
     hideTweetDiv(caret);
@@ -545,8 +548,14 @@ let addBlockButtonEventListeners = (blockButton, caret) => {
 
 // attach the block button to the tweet
 let attachBlockButton = (userNameDiv, caret) => {
-  if (shouldAddBlockButton(userNameDiv)) {
-    let blockButton = createBlockButton();
+  if (!userNameDiv) {
+    return;
+  }
+
+  let tweetUsername = userNameDiv.querySelectorAll("[href]")?.[1]?.textContent;
+  if (shouldAddBlockButton(tweetUsername)) {
+    
+    let blockButton = createBlockButton(tweetUsername);
     addBlockButtonEventListeners(blockButton, caret);
     let caretWrapper = caret.parentElement;
     caretWrapper.insertBefore(blockButton, caret);
