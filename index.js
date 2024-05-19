@@ -8,20 +8,39 @@ let clickConfirmUserBlock = (mutation) => {
   if (
     !mutation.target
       .querySelector('[data-testid="confirmationSheetConfirm"]')
-      ?.classList?.contains("sw-block-button-clicked")
+      ?.classList?.contains("sw-block-confirmation-clicked")
   ) {
     // add a custom class to prevent this from being clicked twice
     mutation.target
       .querySelector('[data-testid="confirmationSheetConfirm"]')
-      ?.classList?.add("sw-block-button-clicked");
+      ?.classList?.add("sw-block-confirmation-clicked");
 
-    let blockConfirmationBlockButton = mutation.target.querySelector('[data-testid="confirmationSheetConfirm"]');
-    let confirmationSheetDialog = mutation.target.querySelector('[data-testid="confirmationSheetDialog"]');
-    let doesConfirmationDialogContainUsernameToBlock = confirmationSheetDialog?.textContent?.toLowerCase()?.includes(usernameToBlock.toLowerCase());
+    let blockConfirmationBlockButton = mutation.target.querySelector(
+      '[data-testid="confirmationSheetConfirm"]'
+    );
+    let confirmationSheetDialog = mutation.target.querySelector(
+      '[data-testid="confirmationSheetDialog"]'
+    );
 
-    if (blockConfirmationBlockButton && doesConfirmationDialogContainUsernameToBlock) {
-      blockConfirmationBlockButton.click();
-      usernameToBlock = null;
+    // confirmation dialog is present and contains confirmation button
+    if (blockConfirmationBlockButton) {
+      // we're blocking from the block button attached to a tweet
+      if (usernameToBlock) {
+        let doesConfirmationDialogContainUsernameToBlock =
+          confirmationSheetDialog?.textContent
+            ?.toLowerCase()
+            ?.includes(usernameToBlock.toLowerCase());
+
+        if (doesConfirmationDialogContainUsernameToBlock) {
+          blockConfirmationBlockButton.click();
+          usernameToBlock = null;
+        }
+      }
+
+      // we're blocking from the block button attached to a profile page
+      if (location.href.includes("block=true")) {
+        blockConfirmationBlockButton.click();
+      }
     }
   }
 };
@@ -151,7 +170,8 @@ let addBlockButtonToProfilePage = (mutation) => {
     document
       .querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')
       ?.querySelector("[tabindex]")
-      ?.textContent?.split("@")?.[1] == location.pathname.split("/")[location.pathname.split("/").length - 1]
+      ?.textContent?.split("@")?.[1] ==
+    location.pathname.split("/")[location.pathname.split("/").length - 1]
   ) {
     isOwnProfilePage = true;
   }
@@ -184,7 +204,10 @@ let addBlockButtonToProfilePage = (mutation) => {
   }
 
   if (userActionsButton) {
-    if (mutation.target.querySelector(".sw-block-button") || userActionsButton.parentElement.querySelector(".sw-block-button")) {
+    if (
+      mutation.target.querySelector(".sw-block-button") ||
+      userActionsButton.parentElement.querySelector(".sw-block-button")
+    ) {
       return null;
     }
 
@@ -203,7 +226,11 @@ let addBlockButtonToProfilePage = (mutation) => {
     let block = urlParams.get("block");
 
     if (block) {
-      if (document.querySelector('[data-testid="primaryColumn"]').textContent.includes('Something went wrong')) {
+      if (
+        document
+          .querySelector('[data-testid="primaryColumn"]')
+          .textContent.includes("Something went wrong")
+      ) {
         somethingWentWrong = true;
 
         // close the tab
@@ -217,7 +244,6 @@ let addBlockButtonToProfilePage = (mutation) => {
       }
 
       blockButton.click();
-      triggerBlockMenuOptionClick();
 
       chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // message received from background script
@@ -245,12 +271,15 @@ let sendBlockRequest = (username) => {
 };
 
 let addBlockButtonsToEngagementsPages = (mutation) => {
-  let isAUserProfilePage = document.querySelector('[data-testid="userActions"]');
+  let isAUserProfilePage = document.querySelector(
+    '[data-testid="userActions"]'
+  );
   // if there's no tweets on the page, return. Else, the extension crashes
   if (
     !mutation.target.querySelector('[data-testid="cellInnerDiv"]') ||
-    !mutation.target.querySelector('[data-testid="cellInnerDiv"]').textContent
-    || isAUserProfilePage
+    !mutation.target.querySelector('[data-testid="cellInnerDiv"]')
+      .textContent ||
+    isAUserProfilePage
   ) {
     return;
   }
@@ -497,9 +526,7 @@ let createProfileBlockButton = (page) => {
 // check if we should add the block button to the tweet
 let shouldAddBlockButton = (tweetUsername) => {
   // don't add block buttons to the user's own tweets
-  if (
-    tweetUsername !== ownUsername
-  ) {
+  if (tweetUsername !== ownUsername) {
     return true;
   }
 };
@@ -520,7 +547,9 @@ let triggerBlockMenuOptionClick = () => {
     }
   );
   setTimeout(() => {
-    let blockMenuOptionsBlockOption = document.querySelector('[data-testid="block"]');
+    let blockMenuOptionsBlockOption = document.querySelector(
+      '[data-testid="block"]'
+    );
     // set isBlockClicked to false so that this feature is no longer active and doesn't interfere with other features
     isBlockClicked = false;
     if (!blockMenuOptionsBlockOption) {
@@ -554,7 +583,6 @@ let attachBlockButton = (userNameDiv, caret) => {
 
   let tweetUsername = userNameDiv.querySelectorAll("[href]")?.[1]?.textContent;
   if (shouldAddBlockButton(tweetUsername)) {
-    
     let blockButton = createBlockButton(tweetUsername);
     addBlockButtonEventListeners(blockButton, caret);
     let caretWrapper = caret.parentElement;
