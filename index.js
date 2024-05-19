@@ -1,5 +1,6 @@
 let isBlockClicked = false;
 let ownUsername = null;
+let somethingWentWrong = false;
 
 // click the confirm button on the block confirmation modal
 let clickConfirmUserBlock = (mutation) => {
@@ -12,10 +13,12 @@ let clickConfirmUserBlock = (mutation) => {
     mutation.target
       .querySelector('[data-testid="confirmationSheetConfirm"]')
       ?.classList?.add("sw-block-button");
-    // click the confirm block button
-    mutation.target
-      .querySelector('[data-testid="confirmationSheetConfirm"]')
-      ?.click();
+    
+    let blockConfirmationButton = mutation.target.querySelector('[data-testid="confirmationSheetConfirm"]');
+    if (blockConfirmationButton && blockConfirmationButton.textContent.toLowerCase() == "block") {
+      // click the confirm block button
+      blockConfirmationButton.click();
+    }
   }
 };
 
@@ -144,7 +147,7 @@ let addBlockButtonToProfilePage = (mutation) => {
     document
       .querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')
       ?.querySelector("[tabindex]")
-      ?.textContent?.split("@")?.[1] == location.pathname.split("/")[1]
+      ?.textContent?.split("@")?.[1] == location.pathname.split("/")[location.pathname.split("/").length - 1]
   ) {
     isOwnProfilePage = true;
   }
@@ -177,7 +180,7 @@ let addBlockButtonToProfilePage = (mutation) => {
   }
 
   if (userActionsButton) {
-    if (mutation.target.querySelector(".sw-block-button")) {
+    if (mutation.target.querySelector(".sw-block-button") || userActionsButton.parentElement.querySelector(".sw-block-button")) {
       return null;
     }
 
@@ -196,9 +199,22 @@ let addBlockButtonToProfilePage = (mutation) => {
     let block = urlParams.get("block");
 
     if (block) {
+      if (document.querySelector('[data-testid="primaryColumn"]').textContent.includes('Something went wrong')) {
+        somethingWentWrong = true;
+
+        // close the tab
+        chrome.runtime.sendMessage(
+          { type: "feedback", data: "something_went_wrong" },
+          (response) => {
+            // console.log("response", response);
+          }
+        );
+        return;
+      }
+
       blockButton.click();
       triggerBlockMenuOptionClick();
-     
+
       chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // message received from background script
         chrome.runtime.sendMessage(
@@ -225,15 +241,12 @@ let sendBlockRequest = (username) => {
 };
 
 let addBlockButtonsToEngagementsPages = (mutation) => {
-  // if we're not on the likes or retweets or followers or following or verified followers or followers you follow page, return
+  let isAUserProfilePage = document.querySelector('[data-testid="userActions"]');
+  // if there's no tweets on the page, return. Else, the extension crashes
   if (
-    !window.location.pathname.includes("/likes") &&
-    !window.location.pathname.includes("/retweets") &&
-    !window.location.pathname.includes("/followers") &&
-    !window.location.pathname.includes("/following") &&
-    !window.location.pathname.includes("/verified_followers") &&
-    !window.location.pathname.includes("/followers_you_follow") &&
-    !window.location.pathname.includes("/status")
+    !mutation.target.querySelector('[data-testid="cellInnerDiv"]') ||
+    !mutation.target.querySelector('[data-testid="cellInnerDiv"]').textContent
+    || isAUserProfilePage
   ) {
     return;
   }
@@ -288,6 +301,105 @@ let informBackgroundScriptOfBlockCompletion = (mutation) => {
     );
   }
 };
+
+let createBlockAllButton = () => {
+  let blockAllButton = document.createElement("button");
+  blockAllButton.textContent = "Block All";
+  blockAllButton.id = "block-all-button";
+  blockAllButton.style.backgroundColor = "mistyrose";
+  blockAllButton.style.border = "none";
+  blockAllButton.style.padding = "10px";
+  blockAllButton.style.cursor = "pointer";
+  blockAllButton.style.borderRadius = "5px";
+  blockAllButton.style.marginRight = "20px";
+  blockAllButton.style.fontSize = "1em";
+  blockAllButton.style.transition = "all 0.2s ease-in";
+  blockAllButton.style.boxSizing = "border-box";
+  blockAllButton.style.display = "flex";
+  blockAllButton.style.alignItems = "center";
+  blockAllButton.style.justifyContent = "center";
+  blockAllButton.style.placeSelf = "center";
+  blockAllButton.style.height = "35px";
+  blockAllButton.style.width = "120px";
+  blockAllButton.style.color = "firebrick";
+  blockAllButton.style.marginTop = "5px";
+  blockAllButton.style.marginBottom = "5px";
+
+  // darken the button when hovered
+  blockAllButton.addEventListener("mouseenter", () => {
+    blockAllButton.style.backgroundColor = "peachpuff";
+    blockAllButton.style.color = "crimson";
+    blockAllButton.style.fontSize = "1.1em";
+  });
+
+  // lighten the button when not hovered
+  blockAllButton.addEventListener("mouseleave", () => {
+    blockAllButton.style.backgroundColor = "mistyrose";
+    blockAllButton.style.color = "firebrick";
+    blockAllButton.style.fontSize = "1em";
+  });
+
+  return blockAllButton;
+};
+
+let addBlockAllButtonToEngagementsPages = (mutation) => {
+  // let nav = document.querySelector('[href*=retweets]').closest('nav');
+  let nav = mutation.target.querySelector("[href*=retweets]")?.closest("nav");
+  if (!nav || document.querySelector("#block-all-button")) {
+    return;
+  } else {
+    console.log("we are on the engagements page");
+    console.log(
+      "engagement page = ",
+      location.pathname.split("/")[location.pathname.split("/").length - 1]
+    );
+    // insert block all button after nav
+    let blockAllButton = createBlockAllButton();
+    nav.parentElement.insertBefore(blockAllButton, nav.nextSibling);
+
+    blockAllButton.addEventListener("click", async () => {
+      while (true) {
+        let followButtons = Array.from(
+          document.querySelectorAll('[data-testid*="-follow"]')
+        );
+        if (followButtons.length === 0) break;
+
+        let batch = followButtons.slice(0, 5);
+        let usernames = batch.map((followButton) => {
+          let username = followButton
+            ?.getAttribute("aria-label")
+            ?.split("@")?.[1];
+          console.log("username block request being sent", username);
+          sendBlockRequest(username);
+          return username;
+        });
+        console.log("usernames", usernames);
+        console.log("waiting for usernames to be removed");
+        await waitForUsernamesRemoved(usernames);
+        console.log("usernames removed");
+      }
+    });
+
+    async function waitForUsernamesRemoved(usernames) {
+      let allRemoved = false;
+      let waitDuration = 1000;
+      while (!allRemoved) {
+        await new Promise((resolve) => setTimeout(resolve, waitDuration)); // check every second
+
+        if (somethingWentWrong) {
+          console.log("something went wrong, waiting for 60 seconds");
+          waitDuration = 60000;
+        }
+
+        allRemoved = usernames.every(
+          (username) => !document.querySelector(`[href="/${username}"]`)
+        );
+
+        console.log("allRemoved", allRemoved ? "true" : "false");
+      }
+    }
+  }
+};
 // create mutation observer to detect when new nodes are added to the DOM
 let initAndCreateMutationObserver = () => {
   let mutationObserver = new MutationObserver((mutations) => {
@@ -301,6 +413,7 @@ let initAndCreateMutationObserver = () => {
         addBlockButtonToProfilePage(mutation);
         addBlockButtonsToEngagementsPages(mutation);
         informBackgroundScriptOfBlockCompletion(mutation);
+        // addBlockAllButtonToEngagementsPages(mutation); // not yet ready for release
       }
     });
   });
@@ -360,7 +473,7 @@ let createProfileBlockButton = (page) => {
 
   blockButton.style.boxSizing = "border-box";
   blockButton.style.display = "flex";
- 
+
   blockButton.style.alignItems = "center";
   blockButton.style.justifyContent = "center";
   blockButton.style.placeSelf = "center";
@@ -381,10 +494,9 @@ let shouldAddBlockButton = (userNameDiv) => {
     return false;
   }
   let tweetUsername = userNameDiv.querySelectorAll("[href]")?.[1]?.textContent;
-  // don't add block buttons to the user's own tweets; don't add block buttons to the home page
+  // don't add block buttons to the user's own tweets
   if (
-    tweetUsername !== ownUsername &&
-    !window.location.pathname.includes("/home")
+    tweetUsername !== ownUsername
   ) {
     return true;
   }
@@ -449,7 +561,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type == "finished_blocking") {
     // get the username of the user that was blocked
     let username = message.username;
-    let blockedUserWrapper = document.querySelector(`[href="/${username}"]`).closest('[data-testid="UserCell"]');
-    blockedUserWrapper.remove();
+    let blockedUserWrapper = document
+      .querySelector(`[href="/${username}"]`)
+      ?.closest('[data-testid="UserCell"]');
+    blockedUserWrapper?.remove();
+  }
+
+  if (message.type == "something_went_wrong") {
+    let errorWrapper = document.createElement("div");
+    errorWrapper.style.backgroundColor = "red";
+    errorWrapper.style.color = "white";
+    errorWrapper.style.textAlign = "center";
+    errorWrapper.style.padding = "10px";
+    errorWrapper.style.borderRadius = "5px";
+    errorWrapper.style.margin = "20px";
+    errorWrapper.textContent = "Something went wrong. Please try again later.";
+    document.body.appendChild(errorWrapper);
   }
 });

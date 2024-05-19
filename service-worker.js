@@ -2,6 +2,24 @@
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   // handle feedback messages from the content script
   if (message.type == "feedback" && message.data) {
+
+    if (message.data === "something_went_wrong") {
+      // console.log("Something went wrong");
+      closeTab(sender.tab.id);
+
+      // get active tab
+      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        // send something_went_wrong message to the active tab, so that it can display an error message
+        chrome.tabs.sendMessage(
+          tabs[0].id,
+          { type: "something_went_wrong" },
+          function (response) {
+            // console.log('something went wrong');
+          }
+        );
+      });
+    }
+
     if (message.data === "block_button_clicked") {
       let username = message.username;
 
@@ -24,7 +42,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.type == "open_tab" && message.username !== undefined) {
     // console.log("Opening tab for username:", message.username);
     chrome.tabs.create({
-      url: `https://twitter.com/${message.username}?block=true`,
+      url: `https://x.com/${message.username}?block=true`,
       active: false,
     });
   }
