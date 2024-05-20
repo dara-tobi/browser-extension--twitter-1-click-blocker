@@ -38,7 +38,7 @@ let clickConfirmUserBlock = (mutation) => {
       }
 
       // we're blocking from the block button attached to a profile page
-      if (location.href.includes("block=true")) {
+      if (document.querySelector('[data-testid="userActions"]')) {
         blockConfirmationBlockButton.click();
       }
     }
