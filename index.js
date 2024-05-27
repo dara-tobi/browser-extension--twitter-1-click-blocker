@@ -297,6 +297,13 @@ let addBlockButtonsToEngagementsPages = (mutation) => {
       followButton &&
       !followButton.parentElement.querySelector(".sw-block-button")
     ) {
+      let followButtonParentTweet = followButton.closest('[data-testid="tweet"]');
+      if (followButtonParentTweet) {
+        // This follow button is inside a tweet. This happens when viewing a conversation within bookmarks.
+        // Tweets already have their block buttons. No need for an additional block button attached to a follow button that is in a tweet
+        return;
+      }
+
       let blockButton = createProfileBlockButton("engagements-page");
       followButton.parentElement.appendChild(blockButton);
       followButton.parentElement.style.flexDirection = "row";
@@ -323,7 +330,7 @@ let informBackgroundScriptOfBlockCompletion = (mutation) => {
 
   if (
     mutation.target.querySelector('[data-testid="placementTracking"]')
-      ?.textContent == "Blocked"
+      ?.querySelector('[data-testid*="unblock"]')
   ) {
     let username = location.pathname.split("/")[1];
     chrome.runtime.sendMessage(
