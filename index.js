@@ -2,6 +2,14 @@ let isBlockClicked = false;
 let ownUsername = null;
 let somethingWentWrong = false;
 let usernameToBlock = null;
+let ___twitter_MetaTheme_Color___ = document.querySelector("meta[name=theme-color]")?.content;
+let themeColorsBgColorMap = {
+  "#000000": "#1d2d3c",
+  "#15202B": "#1d2d3c",
+  "#FFFFFF": "mistyrose",
+};
+let blockerBgColor = themeColorsBgColorMap[___twitter_MetaTheme_Color___] || "#1d2d3c";
+
 
 // click the confirm button on the block confirmation modal
 let clickConfirmUserBlock = (mutation) => {
@@ -346,7 +354,7 @@ let createBlockAllButton = () => {
   let blockAllButton = document.createElement("button");
   blockAllButton.textContent = "Block All";
   blockAllButton.id = "block-all-button";
-  blockAllButton.style.backgroundColor = "mistyrose";
+  blockAllButton.style.backgroundColor = blockerBgColor;
   blockAllButton.style.border = "none";
   blockAllButton.style.padding = "10px";
   blockAllButton.style.cursor = "pointer";
@@ -374,7 +382,7 @@ let createBlockAllButton = () => {
 
   // lighten the button when not hovered
   blockAllButton.addEventListener("mouseleave", () => {
-    blockAllButton.style.backgroundColor = "mistyrose";
+    blockAllButton.style.backgroundColor = blockerBgColor;;
     blockAllButton.style.color = "firebrick";
     blockAllButton.style.fontSize = "1em";
   });
@@ -478,7 +486,8 @@ let createBlockButton = (tweetUsername) => {
   blockButton.addEventListener("mouseleave", () => {
     blockButton.style.fontSize = "0.6em";
   });
-  blockButton.style.backgroundColor = "mistyrose";
+
+  blockButton.style.backgroundColor = blockerBgColor;
   blockButton.style.lineHeight = "10px";
   blockButton.style.width = "12px";
   blockButton.style.fontSize = "0.6em";
@@ -510,7 +519,7 @@ let createProfileBlockButton = (page) => {
     blockButton.style.fontSize = "0.6em";
   });
   blockButton.style.fontSize = "0.6em";
-  blockButton.style.backgroundColor = "mistyrose";
+  blockButton.style.backgroundColor = blockerBgColor;
   blockButton.style.transition = "font-size 0.2s ease-in";
 
   blockButton.style.boxSizing = "border-box";
