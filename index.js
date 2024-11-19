@@ -2,15 +2,60 @@ let isBlockClicked = false;
 let ownUsername = null;
 let somethingWentWrong = false;
 let usernameToBlock = null;
-let ___twitter_MetaTheme_Color___ = document.querySelector("meta[name=theme-color]")?.content;
-let themeColorsBgColorMap = {
-  "#000000": "#1d2d3c",
-  "#15202B": "#1d2d3c",
-  "#FFFFFF": "mistyrose",
+let blockerBgColor = document.querySelector("meta[name=theme-color]")?.content;
+let blockerColor = {
+  "#000000": "rgb(113, 118, 123)",
+  "#15202B": "rgb(139, 152, 165)",
+  "#FFFFFF": "rgb(83, 100, 113)",
+}[blockerBgColor];
+
+let checkIfTweetIsSpam = (mutation) => {
+  // location.href.includes('https://x.com/search?q=')
+  if (!location.href.includes("https://x.com/search?q=")) {
+    // not on search page, so no need to check for spam... return
+    return;
+  }
+
+  // check if mutation is a tweet
+
+  let tweet = mutation.target.closest('[data-testid="tweet"]');
+  if (!tweet) {
+    return;
+  }
+
+  if (tweet.textContent.includes("Replying to")) {
+    // console.log("tweet is a reply, returning", tweet.textContent);
+    return;
+  }
+
+  let tweetText = tweet.querySelector('[data-testid="tweetText"]');
+
+  if (!tweetText || tweetText.getAttribute("data-spam-checked")) {
+    return;
+  }
+
+  let time = tweet.querySelector("time");
+  console.log("time", time.getAttribute("datetime"));
+  let statusId = time?.closest("a")?.getAttribute("href")?.split("/")?.pop();
+  console.log("statusId", statusId);
+
+  // add attribute to tweet so we know it's been checked
+  tweetText.setAttribute("data-spam-checked", "true");
+
+  let tweetTextContent = tweetText.textContent;
+  // console.log("tweet", tweet.querySelector('[data-testid="tweetText"]')?.textContent);
+
+  // send tweet to background script to check if it's spam
+  chrome.runtime.sendMessage(
+    { type: "check_spam", tweetTextContent },
+    (response) => {
+      console.log("response from service worker spam checker", response);
+      if (response.is_spam?.is_spam && response.is_spam?.is_spam === true) {
+        tweetText.style.backgroundColor = "rgba(255, 0, 0, 0.5)";
+      }
+    }
+  );
 };
-let blockerBgColor = themeColorsBgColorMap[___twitter_MetaTheme_Color___] || "#1d2d3c";
-
-
 // click the confirm button on the block confirmation modal
 let clickConfirmUserBlock = (mutation) => {
   if (
@@ -162,29 +207,26 @@ let temporarilyHideTwitterThankYouMessage = (mutation) => {
   }
 };
 
-let addBlockButtonToProfilePage = (mutation) => {
-  let isProfilePage = null;
-  let isOwnProfilePage = null;
-  let userActionsButton = null;
-  if (
-    !!document.querySelector(
-      `[data-testid="UserAvatar-Container-${location.pathname.split("/")[1]}"]`
-    )
-  ) {
-    isProfilePage = true;
-  }
+let isProfilePage = () => {
+  return !!document.querySelector(
+    `[data-testid="UserAvatar-Container-${location.pathname.split("/")[1]}"]`
+  );
+};
 
-  if (
+let isOwnProfilePage = () => {
+  return (
     document
       .querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')
       ?.querySelector("[tabindex]")
       ?.textContent?.split("@")?.[1] ==
     location.pathname.split("/")[location.pathname.split("/").length - 1]
-  ) {
-    isOwnProfilePage = true;
-  }
+  );
+};
 
-  if (isOwnProfilePage) {
+let addBlockButtonToProfilePage = (mutation) => {
+  let userActionsButton = null;
+
+  if (isOwnProfilePage()) {
     // when we navigate to our own profile page, from another profile page where there's a block button
     // Twitter retains the button appended on that user's profile page, remove the block button from our own profile page
     if (mutation.target.querySelector(".sw-block-button")) {
@@ -192,7 +234,7 @@ let addBlockButtonToProfilePage = (mutation) => {
     }
   }
 
-  if (isProfilePage && !isOwnProfilePage) {
+  if (isProfilePage() && !isOwnProfilePage()) {
     userActionsButton = mutation.target.querySelector(
       '[data-testid="userActions"]'
     );
@@ -230,44 +272,90 @@ let addBlockButtonToProfilePage = (mutation) => {
       triggerBlockMenuOptionClick();
     });
 
-    let urlParams = new URLSearchParams(window.location.search);
-    let block = urlParams.get("block");
-
-    if (block) {
-      if (
-        document
-          .querySelector('[data-testid="primaryColumn"]')
-          .textContent.includes("Something went wrong")
-      ) {
-        somethingWentWrong = true;
-
-        // close the tab
-        chrome.runtime.sendMessage(
-          { type: "feedback", data: "something_went_wrong" },
-          (response) => {
-            // console.log("response", response);
-          }
-        );
-        return;
-      }
-
-      blockButton.click();
-
-      chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        // message received from background script
-        chrome.runtime.sendMessage(
-          {
-            type: "feedback",
-            data: "sending message to background script after receving one",
-          },
-          (response) => {
-            // console.log("response", response);
-          }
-        );
-      });
-    }
+    // trigger custom event to let us know the block button has been added
+    document.dispatchEvent(new Event("profileBlockButtonAdded"));
   }
 };
+
+let autoBlockUserFromProfilePageParam = (mutation) => {
+  let urlParams = new URLSearchParams(window.location.search);
+  let block = urlParams.get("block");
+
+  // if there's no block param, then we don't need to block the user, return
+  if (!block) {
+    return;
+  }
+
+  if (block) {
+    if (
+      document
+        .querySelector('[data-testid="primaryColumn"]')
+        .textContent.includes("Something went wrong")
+    ) {
+      somethingWentWrong = true;
+
+      // close the tab
+      chrome.runtime.sendMessage(
+        { type: "feedback", data: "something_went_wrong" },
+        (response) => {
+          // console.log("response", response);
+        }
+      );
+      return;
+    }
+
+    let blockButton = document.querySelector(".sw-profile-block-button");
+
+    blockButton.click();
+
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      // message received from background script
+      chrome.runtime.sendMessage(
+        {
+          type: "feedback",
+          data: "sending message to background script after receving one",
+        },
+        (response) => {
+          // console.log("response", response);
+        }
+      );
+    });
+  }
+};
+
+let autoBlockUserFromStatusPageParam = () => {
+  let username = location.pathname.split("/")[1];
+  let statusId = location.pathname.split("/").pop();
+  let urlParams = new URLSearchParams(window.location.search);
+  let block = urlParams.get("block");
+
+  // if there's no block param, then we don't need to block the user, return
+  if (!block) {
+    return;
+  }
+
+  let blockButtons = document.querySelectorAll(".sw-block-button");
+  for (let blockButton of blockButtons) {
+    if (
+      blockButton.closest("article").querySelector(`a[href*="${statusId}"]`)
+    ) {
+      // dispatch event to let us know the block button has been added
+      blockButton.click();
+
+      chrome.runtime.sendMessage(
+        { type: "feedback", data: "block_button_clicked", username },
+        (response) => {
+          // console.log("response", response);
+        }
+      );
+
+      break;
+    }
+  
+
+
+  }
+}
 
 let sendBlockRequest = (username) => {
   chrome.runtime.sendMessage(
@@ -305,7 +393,9 @@ let addBlockButtonsToEngagementsPages = (mutation) => {
       followButton &&
       !followButton.parentElement.querySelector(".sw-block-button")
     ) {
-      let followButtonParentTweet = followButton.closest('[data-testid="tweet"]');
+      let followButtonParentTweet = followButton.closest(
+        '[data-testid="tweet"]'
+      );
       if (followButtonParentTweet) {
         // This follow button is inside a tweet. This happens when viewing a conversation within bookmarks.
         // Tweets already have their block buttons. No need for an additional block button attached to a follow button that is in a tweet
@@ -337,7 +427,8 @@ let informBackgroundScriptOfBlockCompletion = (mutation) => {
   }
 
   if (
-    mutation.target.querySelector('[data-testid="placementTracking"]')
+    mutation.target
+      .querySelector('[data-testid="placementTracking"]')
       ?.querySelector('[data-testid*="unblock"]')
   ) {
     let username = location.pathname.split("/")[1];
@@ -361,7 +452,7 @@ let createBlockAllButton = () => {
   blockAllButton.style.borderRadius = "5px";
   blockAllButton.style.marginRight = "20px";
   blockAllButton.style.fontSize = "1em";
-  blockAllButton.style.transition = "all 0.2s ease-in";
+  blockAllButton.style.transition = "all 0.1s ease-in-out";
   blockAllButton.style.boxSizing = "border-box";
   blockAllButton.style.display = "flex";
   blockAllButton.style.alignItems = "center";
@@ -382,7 +473,7 @@ let createBlockAllButton = () => {
 
   // lighten the button when not hovered
   blockAllButton.addEventListener("mouseleave", () => {
-    blockAllButton.style.backgroundColor = blockerBgColor;;
+    blockAllButton.style.backgroundColor = blockerBgColor;
     blockAllButton.style.color = "firebrick";
     blockAllButton.style.fontSize = "1em";
   });
@@ -448,79 +539,111 @@ let addBlockAllButtonToEngagementsPages = (mutation) => {
     }
   }
 };
-// create mutation observer to detect when new nodes are added to the DOM
-let initAndCreateMutationObserver = () => {
-  let mutationObserver = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      if (mutation.addedNodes.length > 0) {
-        setUsername();
-        clickConfirmUserBlock(mutation);
-        hideCaretMenu(mutation);
-        addBlockButtonsToTimelines(mutation);
-        temporarilyHideTwitterThankYouMessage(mutation);
-        addBlockButtonToProfilePage(mutation);
-        addBlockButtonsToEngagementsPages(mutation);
-        informBackgroundScriptOfBlockCompletion(mutation);
-        // addBlockAllButtonToEngagementsPages(mutation); // not yet ready for release
-      }
-    });
-  });
-
-  mutationObserver.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: false,
-  });
-};
 
 // create block button
 let createBlockButton = (tweetUsername) => {
-  let blockButton = document.createElement("div");
-  blockButton.style.cursor = "pointer";
-  blockButton.style.textAlign = "center";
-  blockButton.style.borderRadius = "5px";
-  blockButton.style.marginRight = "20px";
-  blockButton.addEventListener("mouseenter", () => {
-    blockButton.style.fontSize = ".9em";
-  });
-  blockButton.addEventListener("mouseleave", () => {
-    blockButton.style.fontSize = "0.6em";
-  });
+  let wrapper = document.createElement("div");
+  wrapper.classList.add("sw-block-button-wrapper");
+  wrapper.style.display = "grid";
+  wrapper.style.position = "absolute";
+  wrapper.style.borderRadius = "100%";
 
+  wrapper.style.top = "-8px";
+  wrapper.style.right = "15px";
+  wrapper.style.placeItems = "center";
+  // put icon and background in the same template area
+  wrapper.style.gridTemplateAreas = `"icon"`;
+  wrapper.style.gridTemplateColumns = "1fr";
+
+  let blockButton = document.createElement("div");
+  blockButton.style.gridArea = "icon";
+  blockButton.classList.add("sw-block-button");
+  let blockButtonBackground = document.createElement("div");
+  blockButtonBackground.style.gridArea = "icon";
+  blockButtonBackground.classList.add("sw-block-button-background");
+  blockButtonBackground.style.backgroundColor = blockerBgColor;
+  blockButtonBackground.style.borderRadius = "100%";
+
+  blockButtonBackground.style.height = "33px";
+  blockButtonBackground.style.width = "33px";
+  blockButtonBackground.style.zIndex = "-1";
+  blockButtonBackground.style.transition = "all 0.1s ease-in-out";
+  blockButtonBackground.style.boxSizing = "border-box";
+  // top , left
+  // blockButtonBackground.style.top = "-11px";
+  // blockButtonBackground.style.left = "-14px";
+
+  wrapper.style.cursor = "pointer";
+  blockButton.style.textAlign = "center";
+  blockButton.style.borderRadius = "100%";
+
+  wrapper.style.marginRight = "15px";
   blockButton.style.backgroundColor = blockerBgColor;
   blockButton.style.lineHeight = "10px";
-  blockButton.style.width = "12px";
-  blockButton.style.fontSize = "0.6em";
-  blockButton.textContent = "🚫";
-  blockButton.style.transition = "font-size 0.2s ease-in";
+
+  blockButton.innerHTML = `<svg style="transition: all 0.1s ease-in-out" class="sw-block-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="16" height="16" fill="${blockerBgColor}">
+  <circle cx="36" cy="36" r="29" stroke="${blockerColor}" stroke-width="7"/>
+  <line x1="17" y1="17" x2="55" y2="55" stroke="${blockerColor}" stroke-width="7" />
+</svg>`;
+
+  blockButton.style.transition = "all 0.1s ease-in-out";
   blockButton.style.boxSizing = "border-box";
   blockButton.style.display = "flex";
   blockButton.style.alignItems = "center";
   blockButton.style.justifyContent = "center";
   blockButton.style.placeSelf = "center";
-  blockButton.style.height = "25px";
-  blockButton.style.width = "40px";
-  // add username to the block button so we can use it later
-  blockButton.dataset.username = tweetUsername;
 
-  return blockButton;
+  // add username to the block button so we can use it later
+  wrapper.dataset.username = tweetUsername;
+  wrapper.appendChild(blockButtonBackground);
+  wrapper.appendChild(blockButton);
+
+  return wrapper;
 };
 
 let createProfileBlockButton = (page) => {
   let blockButton = document.createElement("div");
-
+  blockButton.classList.add("sw-profile-block-button");
   blockButton.style.cursor = "pointer";
   blockButton.style.textAlign = "center";
-  blockButton.style.borderRadius = "5px";
+  blockButton.style.borderRadius = "100%";
+  blockButton.style.position = "relative";
   blockButton.addEventListener("mouseenter", () => {
-    blockButton.style.fontSize = "0.9em";
+    // blockButton.style.fontSize = "0.9em";
+    blockButton.style.backgroundColor = "rgba(255,0,64, 0.1)";
+
+    blockButton
+      .querySelector(".sw-block-icon")
+      .querySelector("circle").style.stroke = "rgb(255,0,64)";
+    blockButton
+      .querySelector(".sw-block-icon")
+      .querySelector("line").style.stroke = "rgb(255,0,64)";
+
+    blockButton.querySelector(".sw-block-icon").style.fill =
+      "rgb(255,0,64, 0.1)";
+
+    // add a tiny block of text that says "Block User"
+    addBlockButtonHoverTitle(blockButton, true);
   });
+
   blockButton.addEventListener("mouseleave", () => {
-    blockButton.style.fontSize = "0.6em";
+    blockButton.style.backgroundColor = blockerBgColor;
+    blockButton.querySelector(".sw-block-icon").style.fill = blockerBgColor;
+    blockButton
+      .querySelector(".sw-block-icon")
+      .querySelector("circle").style.stroke = blockerColor;
+    blockButton
+      .querySelector(".sw-block-icon")
+      .querySelector("line").style.stroke = blockerColor;
+
+    let blockText = document.querySelector("#sw-tooltip-block-text");
+    if (blockText) {
+      blockText.remove();
+    }
   });
-  blockButton.style.fontSize = "0.6em";
+
   blockButton.style.backgroundColor = blockerBgColor;
-  blockButton.style.transition = "font-size 0.2s ease-in";
+  blockButton.style.transition = "all 0.1s ease-in-out";
 
   blockButton.style.boxSizing = "border-box";
   blockButton.style.display = "flex";
@@ -528,14 +651,17 @@ let createProfileBlockButton = (page) => {
   blockButton.style.alignItems = "center";
   blockButton.style.justifyContent = "center";
   blockButton.style.placeSelf = "center";
-  blockButton.textContent = "🚫";
+  blockButton.innerHTML = `<svg title="Block User" class="sw-block-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="16" height="16" fill="${blockerBgColor}">
+  <circle cx="36" cy="36" r="29" stroke="${blockerColor}" stroke-width="7"/>
+  <line x1="17" y1="17" x2="55" y2="55" stroke="${blockerColor}" stroke-width="7"/>
+</svg>`;
   blockButton.style.marginLeft = "5px";
 
   if (page !== "engagements-page") {
-    blockButton.style.marginBottom = "12px";
+    blockButton.style.marginBottom = "6px";
   }
   blockButton.style.width = "40px";
-  blockButton.style.height = "25px";
+  blockButton.style.height = "40px";
 
   return blockButton;
 };
@@ -582,13 +708,122 @@ let hideTweetDiv = (caret) => {
 
 // add event listeners to the block button
 let addBlockButtonEventListeners = (blockButton, caret) => {
-  blockButton.addEventListener("click", (e) => {
-    usernameToBlock = blockButton.dataset.username;
+  let blockButtonWrapper = blockButton;
+
+  let blockButtonBackground = blockButton.querySelector(
+    ".sw-block-button-background"
+  );
+
+  blockButtonWrapper.addEventListener("click", (e) => {
+    usernameToBlock = blockButtonWrapper.dataset.username;
     e.stopPropagation();
     triggerMenuclick(caret);
     hideTweetDiv(caret);
     triggerBlockMenuOptionClick(caret);
   });
+
+  blockButtonWrapper.addEventListener("mouseenter", () => {
+    blockButtonWrapper.style.transition = "all 0.1s ease-in-out";
+    // blockButton.style.backgroundColor = "rgba(255,0,64, 0.1)";
+    blockButton.style.backgroundColor = "rgba(255,0,64, 0.1)";
+    blockButton.style.color = "rgb(255,0,64)";
+
+    blockButton
+      .querySelector(".sw-block-icon")
+      .querySelector("circle").style.stroke = "rgb(255,0,64)";
+    blockButton
+      .querySelector(".sw-block-icon")
+      .querySelector("line").style.stroke = "rgb(255,0,64)";
+
+    blockButtonWrapper.style.transform = "rotate(270deg)";
+
+    blockButton.querySelector(".sw-block-icon").style.fill =
+      "rgb(255,0,64, 0.1)";
+
+    // blockButton.querySelector(".sw-block-icon").style.backgroundColor =
+    //   "rgba(255,0,64, 0.1)";
+
+    blockButtonBackground.style.backgroundColor = "rgba(255,0,64, 0.1)";
+
+    // add a tiny block of text that says "Block User"
+
+    addBlockButtonHoverTitle(blockButton);
+  });
+
+  blockButtonWrapper.addEventListener("mouseleave", () => {
+    blockButton.style.backgroundColor = blockerBgColor;
+    blockButton.style.color = blockerColor;
+
+    blockButton
+      .querySelector(".sw-block-icon")
+      .querySelector("circle").style.stroke = blockerColor;
+    blockButton
+      .querySelector(".sw-block-icon")
+      .querySelector("line").style.stroke = blockerColor;
+
+    blockButtonWrapper.style.transform = "rotate(0deg)";
+
+    blockButton.querySelector(".sw-block-icon").style.fill = blockerBgColor;
+
+    // blockButton.querySelector(".sw-block-icon").style.backgroundColor =
+    //   blockerBgColor;
+
+    // wrapper
+    blockButton.style.backgroundColor = blockerBgColor;
+    blockButtonBackground.style.backgroundColor = blockerBgColor;
+
+    let blockText = document.querySelector("#sw-tooltip-block-text");
+
+    if (blockText) {
+      blockText.remove();
+    }
+  });
+};
+let addBlockButtonHoverTitle = (blockButton, isProfile = false) => {
+  let username = blockButton.dataset.username || "User";
+
+  let hasAddedBlockText = document.querySelector("#sw-tooltip-block-text");
+  if (hasAddedBlockText) {
+    return;
+  }
+  let titleParent = document.createElement("div");
+  titleParent.id = "sw-tooltip-block-text";
+  titleParent.style.display = "flex";
+  titleParent.style.paddingInline = "4px";
+  titleParent.style.position = "fixed";
+  titleParent.style.fontSize = "11px";
+  titleParent.style.backgroundColor = "rgba(91, 112, 131)";
+  titleParent.style.alignItems = "center";
+  titleParent.style.justifyContent = "center";
+  titleParent.style.pointerEvents = "none";
+  titleParent.style.minHeight = "20px";
+  titleParent.style.borderRadius = "2px";
+
+  titleParent.innerHTML = `
+      <div role="tooltip" >
+        <span dir="ltr" data-testid="HoverLabel" style="font-weight: 400; color: #fff; font-family: 'TwitterChirp', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+          <span>Block ${username}</span>
+        </span>
+      </div>
+    `;
+
+  // get position of block button
+  let blockButtonPosition = blockButton.getBoundingClientRect();
+
+  titleParent.style.top = `${blockButtonPosition.top + 42}px`;
+
+  // left should be dynamic so that it's always centered regadless of title parent width
+  titleParent.style.left = `calc(50% + ${blockButtonPosition.left}px - 50% + 15px)`;
+
+  if (isProfile) {
+    titleParent.style.left = `calc(50% + ${blockButtonPosition.left}px - 50% + 20px)`;
+  } else {
+    titleParent.style.left = `calc(50% + ${blockButtonPosition.left}px - 50% + 15px)`;
+  }
+
+  titleParent.style.transform = "translateX(-50%)";
+
+  document.body.appendChild(titleParent);
 };
 
 // attach the block button to the tweet
@@ -603,11 +838,27 @@ let attachBlockButton = (userNameDiv, caret) => {
     addBlockButtonEventListeners(blockButton, caret);
     let caretWrapper = caret.parentElement;
     caretWrapper.insertBefore(blockButton, caret);
+
+    if (
+      caretWrapper
+        .closest("article")
+        .querySelector('[data-testid$="subscribe"]')
+    ) {
+      blockButton.style.right = "110px";
+    }
+
+    if (location.href.includes("status")) {
+      let statusId = location.pathname.split("/").pop();
+
+
+      let blockButtonParentArticle = caretWrapper.closest("article");
+      if (blockButtonParentArticle.querySelector(`a[href*="${statusId}"]`)) {
+        // dispatch event to let us know the block button has been added
+        document.dispatchEvent(new Event("statusPageBlockButtonAdded"));
+      }
+    }
   }
 };
-
-// initialize the app; create mutation observer
-initAndCreateMutationObserver();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // message received from background script
@@ -631,4 +882,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     errorWrapper.textContent = "Something went wrong. Please try again later.";
     document.body.appendChild(errorWrapper);
   }
+});
+
+// create mutation observer to detect when new nodes are added to the DOM
+let initAndCreateMutationObserver = () => {
+  let mutationObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.addedNodes.length > 0) {
+        setUsername();
+        clickConfirmUserBlock(mutation);
+        hideCaretMenu(mutation);
+        addBlockButtonsToTimelines(mutation);
+        temporarilyHideTwitterThankYouMessage(mutation);
+        addBlockButtonToProfilePage(mutation);
+        addBlockButtonsToEngagementsPages(mutation);
+        informBackgroundScriptOfBlockCompletion(mutation);
+        checkIfTweetIsSpam(mutation);
+
+        // addBlockAllButtonToEngagementsPages(mutation); // not yet ready for release
+      }
+    });
+  });
+
+  mutationObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: false,
+  });
+};
+
+// initialize the app; create mutation observer
+initAndCreateMutationObserver();
+document.addEventListener("profileBlockButtonAdded", () => {
+  console.log("block button added");
+  autoBlockUserFromProfilePageParam();
+});
+
+document.addEventListener("statusPageBlockButtonAdded", () => {
+  console.log("block button added to status page");
+  autoBlockUserFromStatusPageParam()
 });
