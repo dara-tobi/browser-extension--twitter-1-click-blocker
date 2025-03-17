@@ -186,8 +186,8 @@ class TwitterBlocker {
           }
         }
         if (node.getAttribute("data-testid") === "cellInnerDiv") {
-          nodeOfInterest = node;
-        }
+        nodeOfInterest = node;
+      }
     });
   }
   return nodeOfInterest;
@@ -477,13 +477,13 @@ class BlockButtonUI {
     const blockButton = this.createButton();
     const background = this.createBackground();
 
-    wrapper.dataset.username = tweetUsername;
+  wrapper.dataset.username = tweetUsername;
     wrapper.appendChild(background);
-    wrapper.appendChild(blockButton);
+  wrapper.appendChild(blockButton);
 
     this.addHoverEffects(blockButton, background);
 
-    return wrapper;
+  return wrapper;
   }
 
   createWrapper(menuOptionsButton) {
@@ -568,6 +568,12 @@ class BlockButtonUI {
       circle.style.stroke = "rgb(255,0,64)";
       line.style.stroke = "rgb(255,0,64)";
       icon.style.fill = "rgb(255,0,64, 0.1)";
+
+      // Add tooltip
+      const username = button.closest(`.${CONFIG.classes.blockButtonWrapper}`)?.dataset.username;
+      if (username) {
+        this.addBlockButtonHoverTitle(button, username, false);
+      }
     };
 
     const handleLeave = () => {
@@ -584,12 +590,58 @@ class BlockButtonUI {
       circle.style.stroke = this.color;
       line.style.stroke = this.color;
       icon.style.fill = this.bgColor;
+
+      // Remove tooltip
+      const tooltip = document.querySelector(`#${CONFIG.classes.tooltipText}`);
+      tooltip?.remove();
     };
 
     button.addEventListener("mouseenter", handleEnter);
     button.addEventListener("mouseleave", handleLeave);
     background.addEventListener("mouseenter", handleEnter);
     background.addEventListener("mouseleave", handleLeave);
+  }
+
+  addBlockButtonHoverTitle(blockButton, username, isProfile = false) {
+    let hasAddedBlockText = document.querySelector(`#${CONFIG.classes.tooltipText}`);
+    if (hasAddedBlockText) {
+      return;
+    }
+    
+    let titleParent = document.createElement("div");
+    titleParent.id = CONFIG.classes.tooltipText;
+    titleParent.style.display = "flex";
+    titleParent.style.paddingInline = "4px";
+    titleParent.style.position = "fixed";
+    titleParent.style.fontSize = "11px";
+    titleParent.style.backgroundColor = "rgba(91, 112, 131)";
+    titleParent.style.alignItems = "center";
+    titleParent.style.justifyContent = "center";
+    titleParent.style.pointerEvents = "none";
+    titleParent.style.minHeight = "20px";
+    titleParent.style.borderRadius = "2px";
+
+    titleParent.innerHTML = `
+      <div role="tooltip">
+        <span dir="ltr" data-testid="HoverLabel" style="font-weight: 400; color: #fff; font-family: 'TwitterChirp', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+          <span>Block ${username}</span>
+        </span>
+      </div>
+    `;
+
+    // Get position of block button
+    let blockButtonPosition = blockButton.getBoundingClientRect();
+    titleParent.style.top = `${blockButtonPosition.top + 42}px`;
+
+    // Left should be dynamic so that it's always centered regardless of title parent width
+    if (isProfile) {
+      titleParent.style.left = `calc(50% + ${blockButtonPosition.left}px - 50% + 20px)`;
+    } else {
+      titleParent.style.left = `calc(50% + ${blockButtonPosition.left}px - 50% + 15px)`;
+    }
+
+    titleParent.style.transform = "translateX(-50%)";
+    document.body.appendChild(titleParent);
   }
 }
 
@@ -635,6 +687,12 @@ class ProfileBlockButtonUI extends BlockButtonUI {
       circle.style.stroke = "rgb(255,0,64)";
       line.style.stroke = "rgb(255,0,64)";
       icon.style.fill = "rgb(255,0,64, 0.1)";
+
+      // Add tooltip for profile
+      const username = location.pathname.split("/")[1];
+      if (username) {
+        this.addBlockButtonHoverTitle(button, "@" + username, true);
+      }
     });
 
     button.addEventListener("mouseleave", () => {
