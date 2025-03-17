@@ -5,11 +5,11 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*.x.com/*", "https://x.com/*"],
+      "matches": ["https://*.x.com/*", "https://x.com/*", "https://*.twitter.com/*", "https://twitter.com/*"],
       "js": ["index.js"]
     }
   ],
-  "description": "Block users on Twitter in one click instead of 3. Block from any page where users are listed (/likes, /followers, etc)!",
+  "description": "Block users on Twitter in one click instead of 3. Block from any page where users are listed (/retweets, /followers, etc)!",
   "icons": {
     "48": "images/one-click-blocker.png"
   },
@@ -17,5 +17,5 @@
   "name": "1-click blocker for Twitter",
   "offline_enabled": true,
   "short_name": "Twitter 1-click blocker",
-  "version": "1.0.12"
+  "version": "1.0.18"
 }
