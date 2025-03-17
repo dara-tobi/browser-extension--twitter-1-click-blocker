@@ -1,8 +1,9 @@
+chrome.runtime.setUninstallURL('https://docs.google.com/forms/d/15hOeb2GIHZXcwa8HeiVIIEAqe8gntzGyYLZS5XXTZSE');
+
 // Listen for messages from the foreground script
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   // handle feedback messages from the content script
   if (message.type == "feedback" && message.data) {
-
     if (message.data === "something_went_wrong") {
       // console.log("Something went wrong");
       closeTab(sender.tab.id);
@@ -47,5 +48,5 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     });
   }
 
-  sendResponse("Message " + message + " received in service worker!");
+  // sendResponse("Message " + message + " received in service worker!");
 });
