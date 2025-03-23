@@ -1,54 +1,58 @@
 // Default settings configuration
 const DEFAULT_SETTINGS = {
-  action: 'block', // 'block' or 'mute'
-  enabledPages: {
-    timeline: true,
-    followers: true,
-    following: true,
-    search: true,
-    communities: true,
-    engagements: true,
-    status: true
-  }
+    action: 'block', // 'block' or 'mute'
+    enabledPages: {
+        timeline: true,
+        followers: true,
+        following: true,
+        search: true,
+        communities: true,
+        engagements: true,
+        status: true,
+        hashtag: true,
+        trending: true,
+        notifications: true,
+        profile: true
+    }
 };
 
 class SettingsManager {
-  constructor() {
-    this.settings = DEFAULT_SETTINGS;
-    this.loadSettings();
-  }
-
-  async loadSettings() {
-    try {
-      const result = await chrome.storage.sync.get('settings');
-      this.settings = result.settings || DEFAULT_SETTINGS;
-      return this.settings;
-    } catch (error) {
-      console.error('Error loading settings:', error);
-      return DEFAULT_SETTINGS;
+    constructor() {
+        this.settings = DEFAULT_SETTINGS;
+        this.loadSettings();
     }
-  }
 
-  async saveSettings(newSettings) {
-    try {
-      await chrome.storage.sync.set({ settings: newSettings });
-      this.settings = newSettings;
-    } catch (error) {
-      console.error('Error saving settings:', error);
+    async loadSettings() {
+        try {
+            const result = await chrome.storage.sync.get('settings');
+            this.settings = result.settings || DEFAULT_SETTINGS;
+            return this.settings;
+        } catch (error) {
+            console.error('Error loading settings:', error);
+            return DEFAULT_SETTINGS;
+        }
     }
-  }
+
+    async saveSettings(newSettings) {
+        try {
+            await chrome.storage.sync.set({ settings: newSettings });
+            this.settings = newSettings;
+        } catch (error) {
+            console.error('Error saving settings:', error);
+        }
+    }
 }
 
 class SettingsUI {
-  constructor(settingsManager) {
-    this.settingsManager = settingsManager;
-    this.isOpen = false;
-  }
+    constructor(settingsManager) {
+        this.settingsManager = settingsManager;
+        this.isOpen = false;
+    }
 
-  createSettingsButton() {
-    const button = document.createElement('div');
-    button.className = 'one-click-blocker-settings-button';
-    button.innerHTML = `
+    createSettingsButton() {
+        const button = document.createElement('div');
+        button.className = 'one-click-blocker-settings-button';
+        button.innerHTML = `
       <div class="settings-button-inner">
         <button role="button" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px;">
@@ -60,22 +64,22 @@ class SettingsUI {
       </div>
     `;
 
-    // Add styles
-    const style = document.createElement('style');
-    style.textContent = `
+        // Add styles
+        const style = document.createElement('style');
+        style.textContent = `
       .one-click-blocker-settings-button {
-        width: 400px;
-        height: 57px;
+        width: 66px;
+        height: 54px;
         position: fixed;
-        right: 16px;
-        bottom: 16px;
+        right: 10px;
+        top: 30px;
         z-index: 9999;
         background-color: rgb(239, 243, 244);
         border-radius: 12px;
         cursor: pointer;
         transition: background-color 0.2s;
       }
-      
+
       .one-click-blocker-settings-button:hover {
         background-color: rgb(215, 219, 220);
       }
@@ -95,26 +99,26 @@ class SettingsUI {
         border-radius: 50%;
       }
       
-      .settings-button-inner button:hover {
+      .settings-button-inner button:hover .one-click-blocker-settings-button:hover {
         background-color: rgba(15, 20, 25, 0.1);
       }
     `;
-    document.head.appendChild(style);
+        document.head.appendChild(style);
 
-    // Open options page when clicked
-    button.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'open_options' });
-    });
+        // Open options page when clicked
+        button.addEventListener('click', () => {
+            chrome.runtime.sendMessage({ type: 'open_options' });
+        });
 
-    return button;
-  }
+        return button;
+    }
 
-  createSettingsPanel() {
-    const panel = document.createElement('div');
-    panel.className = 'one-click-blocker-settings-panel';
-    panel.style.display = 'none';
-    
-    panel.innerHTML = `
+    createSettingsPanel() {
+        const panel = document.createElement('div');
+        panel.className = 'one-click-blocker-settings-panel';
+        panel.style.display = 'none';
+
+        panel.innerHTML = `
       <div class="settings-panel-header">One-Click Blocker Settings</div>
       
       <div class="settings-section">
@@ -144,43 +148,43 @@ class SettingsUI {
       </div>
     `;
 
-    // Add event listeners for settings changes
-    panel.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(input => {
-      input.addEventListener('change', () => this.saveSettings());
-    });
+        // Add event listeners for settings changes
+        panel.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(input => {
+            input.addEventListener('change', () => this.saveSettings());
+        });
 
-    return panel;
-  }
+        return panel;
+    }
 
-  toggleSettingsPanel() {
-    this.isOpen = !this.isOpen;
-    const panel = document.querySelector('.one-click-blocker-settings-panel');
-    panel.style.display = this.isOpen ? 'block' : 'none';
-  }
+    toggleSettingsPanel() {
+        this.isOpen = !this.isOpen;
+        const panel = document.querySelector('.one-click-blocker-settings-panel');
+        panel.style.display = this.isOpen ? 'block' : 'none';
+    }
 
-  saveSettings() {
-    const newSettings = {
-      action: document.querySelector('input[name="action"]:checked').value,
-      enabledPages: Object.fromEntries(
-        Array.from(document.querySelectorAll('input[name="pages"]'))
-          .map(checkbox => [checkbox.value, checkbox.checked])
-      )
-    };
-    
-    this.settingsManager.saveSettings(newSettings);
-  }
+    saveSettings() {
+        const newSettings = {
+            action: document.querySelector('input[name="action"]:checked').value,
+            enabledPages: Object.fromEntries(
+                Array.from(document.querySelectorAll('input[name="pages"]'))
+                    .map(checkbox => [checkbox.value, checkbox.checked])
+            )
+        };
 
-  mount() {
-    const settingsButton = this.createSettingsButton();
-    const settingsPanel = this.createSettingsPanel();
-    
-    document.body.appendChild(settingsButton);
-    document.body.appendChild(settingsPanel);
-  }
+        this.settingsManager.saveSettings(newSettings);
+    }
+
+    mount() {
+        const settingsButton = this.createSettingsButton();
+        const settingsPanel = this.createSettingsPanel();
+
+        document.body.appendChild(settingsButton);
+        document.body.appendChild(settingsPanel);
+    }
 }
 
 // Export for use in index.js
 window.OneClickBlockerSettings = {
-  SettingsManager,
-  SettingsUI
+    SettingsManager,
+    SettingsUI
 }; 

@@ -276,9 +276,15 @@ class TwitterBlocker {
   element.style.visibility = "hidden";
   }
 
-  handleProfilePageBlockButton(mutation) {
+  async handleProfilePageBlockButton(mutation) {
     const pageInfo = this.getProfilePageInfo();
     if (!pageInfo.isProfilePage || pageInfo.isOwnProfilePage) {
+      return;
+    }
+
+    // Check if we should show the button based on the current page type
+    const pageType = this.getPageType();
+    if (!await this.shouldShowButtonOnPage(pageType)) {
       return;
     }
 
@@ -389,8 +395,71 @@ class TwitterBlocker {
     return settings.action || 'block';
   }
 
+  getPageType() {
+    const path = window.location.pathname;
+    
+    if (path.includes('/search')) {
+      return 'search';
+    }
+    
+    if (path.includes('/retweets') || path.includes('/likes') || path.includes('/quotes')) {
+      return 'engagements';
+    }
+    // verified_followers
+    if (path.includes('/followers') || path.includes('/verified_followers')) {
+      return 'followers';
+    }
+
+    // hashtag
+    if (path.includes('/hashtag')) {
+      return 'hashtag';
+    }
+
+    //i/trending
+    if (path.includes('/i/trending')) {
+      return 'trending';
+    }
+
+    // notifications
+    if (path.includes('/notifications')) {
+      return 'notifications';
+    }
+
+    if (path.includes('/following')) {
+      return 'following';
+    }
+    
+    if (path.includes('/i/communities')) {
+      return 'communities';
+    }
+    
+    if (path === '/home' || path === '/') {
+      return 'timeline';
+    }
+    
+    // Check if it's a status/tweet page
+    if (path.match(/\/status\/\d+/)) {
+      return 'status';
+    }
+
+    // detect profile page without path
+    if (document.querySelector(CONFIG.selectors.userActions)) {
+      return 'profile';
+    }
+    
+    return null;
+  }
+
   async shouldShowButtonOnPage(pageType) {
     const settings = await this.settingsManager.loadSettings();
+    const currentPageType = this.getPageType();
+    
+    // If we're on a specific page type, check if it's enabled
+    if (currentPageType) {
+      return settings.enabledPages?.[currentPageType] ?? true;
+    }
+    
+    // Otherwise, check the requested page type
     return settings.enabledPages?.[pageType] ?? true;
   }
 
@@ -558,10 +627,17 @@ class TwitterBlocker {
     chrome.runtime.sendMessage({ type: "open_tab", username, block: true });
   }
 
-  addBlockButtonsToEngagementsPages(mutation) {    
+  async addBlockButtonsToEngagementsPages(mutation) {    
     let isAUserProfilePage = document.querySelector(
       '[data-testid="userActions"]'
     );
+
+    // Check if we should show the button based on the current page type
+    const pageType = this.getPageType();
+    if (!await this.shouldShowButtonOnPage(pageType)) {
+      return;
+    }
+
     // if there's no tweets on the page, return. Else, the extension crashes
     if (
       !mutation.target.querySelector('[data-testid="cellInnerDiv"]') ||
