@@ -559,9 +559,15 @@ class TwitterBlocker {
   }
 
   addBlockButtonsToEngagementsPages(mutation) {    
+    let isAUserProfilePage = document.querySelector(
+      '[data-testid="userActions"]'
+    );
+    // if there's no tweets on the page, return. Else, the extension crashes
     if (
-      !mutation.target.querySelector(CONFIG.selectors.cellInnerDiv) ||
-      !mutation.target.querySelector(CONFIG.selectors.cellInnerDiv).textContent
+      !mutation.target.querySelector('[data-testid="cellInnerDiv"]') ||
+      !mutation.target.querySelector('[data-testid="cellInnerDiv"]')
+        .textContent ||
+      isAUserProfilePage
     ) {
       return;
     }
@@ -918,11 +924,22 @@ class ProfileBlockButtonUI extends BlockButtonUI {
       icon.style.fill = "rgb(255,0,64, 0.1)";
 
       // Add tooltip for profile
-      const username = location.pathname.split("/")[1];
-      console.log('outer 🔍 Username:', username);
+      let username;
+      const parentDiv = button.closest('[data-testid="cellInnerDiv"]');
+      if (parentDiv) {
+        // For engagement pages, get username from href
+        const userLink = parentDiv.querySelector('a[href^="/"]');
+        if (userLink) {
+          username = userLink.getAttribute('href').substring(1); // Remove leading '/'
+        }
+      } else {
+        // For profile pages, get username from URL
+        username = location.pathname.split("/")[1];
+      }
+
       if (username) {
         const action = await this.settingsManager?.loadSettings().then(settings => settings.action || 'block');
-        this.addBlockButtonHoverTitle(button, "@" + username, true, action);
+        this.addBlockButtonHoverTitle(button, "@" + username, !parentDiv, action);
       }
     });
 
