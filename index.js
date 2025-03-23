@@ -277,9 +277,6 @@ class TwitterBlocker {
   handleProfilePageBlockButton(mutation) {
     const pageInfo = this.getProfilePageInfo();
     if (!pageInfo.isProfilePage || pageInfo.isOwnProfilePage) {
-      if (pageInfo.isOwnProfilePage) {
-        this.removeBlockButtonFromOwnProfile(mutation);
-      }
       return;
     }
 
