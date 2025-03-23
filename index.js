@@ -165,23 +165,15 @@ class TwitterBlocker {
     const blockButton = document.querySelector(CONFIG.selectors.blockButton);
     if (!blockButton) return null;
     
-    // Use the same profile page detection as elsewhere in the code
-    const isProfilePage = document.querySelector(CONFIG.selectors.userActions);
+    const isStatusPage = location.pathname.includes('/status/');
+
+    const muteButton = isStatusPage ? 
+      blockButton.previousElementSibling?.previousElementSibling : 
+      blockButton.previousElementSibling;
     
-    // On profile page, mute button is directly before block button
-    // On timeline, mute button is two elements before block button
-    const muteButton = isProfilePage ? 
-      blockButton.previousElementSibling : 
-      blockButton.previousElementSibling?.previousElementSibling;
-    
-    if (muteButton?.textContent?.toLowerCase().includes('@') && !muteButton.textContent.toLowerCase().includes('conversation')) {
-      console.log('🔊 Found mute button:', muteButton);
+    if (muteButton?.textContent?.toLowerCase().includes('@')) {
       return muteButton;
     }
-    console.log('blockButton', blockButton);
-    console.log('blockButton.previousElementSibling', blockButton.previousElementSibling);
-    console.log('blockButton.previousElementSibling?.previousElementSibling', blockButton.previousElementSibling?.previousElementSibling);
-    console.log('❌ No mute button found', muteButton, 'isProfilePage', isProfilePage);
     return null;
   }
 

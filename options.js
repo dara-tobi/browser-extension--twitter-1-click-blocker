@@ -78,18 +78,15 @@ class OptionsManager {
 
     // Update stats
     if (settings.stats) {
-      document.querySelectorAll('.stat-number').forEach((stat, index) => {
-        const values = [
-          settings.stats.totalBlocks,
-          settings.stats.weeklyBlocks,
-          settings.stats.monthlyBlocks
-        ];
-        stat.textContent = values[index];
-      });
+      document.getElementById('total-blocks').textContent = settings.stats.totalBlocks || 0;
+      document.getElementById('total-mutes').textContent = settings.stats.totalMutes || 0;
+      document.getElementById('monthly-blocks').textContent = settings.stats.monthlyBlocks || 0;
+      document.getElementById('monthly-mutes').textContent = settings.stats.monthlyMutes || 0;
     }
 
-    // Update blocked users list
+    // Update blocked and muted users lists
     this.updateBlockedUsersList(settings.stats?.blockedUsers || []);
+    this.updateMutedUsersList(settings.stats?.mutedUsers || []);
   }
 
   updateBlockedUsersList(users) {
@@ -102,6 +99,18 @@ class OptionsManager {
         <button class="button" onclick="optionsManager.unblockUser('${user}')">Unblock</button>
       </div>
     `).join('') : '<p>No blocked users yet.</p>';
+  }
+
+  updateMutedUsersList(users) {
+    const list = document.getElementById('muted-users-list');
+    list.innerHTML = users.length ? users.map(user => `
+      <div class="blocked-user">
+        <div class="blocked-user-info">
+          <span>@${user}</span>
+        </div>
+        <button class="button" onclick="optionsManager.unmuteUser('${user}')">Unmute</button>
+      </div>
+    `).join('') : '<p>No muted users yet.</p>';
   }
 
   async unblockUser(username) {
@@ -117,6 +126,22 @@ class OptionsManager {
       this.updateUI(settings);
     } catch (error) {
       console.error('Error unblocking user:', error);
+    }
+  }
+
+  async unmuteUser(username) {
+    try {
+      const result = await chrome.storage.sync.get('settings');
+      const settings = result.settings || DEFAULT_SETTINGS;
+      
+      settings.stats.mutedUsers = settings.stats.mutedUsers.filter(user => user !== username);
+      settings.stats.totalMutes = Math.max(0, settings.stats.totalMutes - 1);
+      
+      await chrome.storage.sync.set({ settings });
+      this.updateMutedUsersList(settings.stats.mutedUsers);
+      this.updateUI(settings);
+    } catch (error) {
+      console.error('Error unmuting user:', error);
     }
   }
 

@@ -283,23 +283,33 @@
           <!-- Will be populated by JavaScript -->
         </div>
       </div>
+      <div class="section">
+        <div class="section-title">Muted Users</div>
+        <div id="muted-users-list">
+          <!-- Will be populated by JavaScript -->
+        </div>
+      </div>
     </div>
 
     <div id="stats" class="tab-content">
       <div class="section">
-        <div class="section-title">Block Statistics</div>
+        <div class="section-title">Action Statistics</div>
         <div class="stats">
           <div class="stat-card">
-            <div class="stat-number">0</div>
+            <div class="stat-number" id="total-blocks">0</div>
             <div class="stat-label">Total Blocks</div>
           </div>
           <div class="stat-card">
-            <div class="stat-number">0</div>
-            <div class="stat-label">This Week</div>
+            <div class="stat-number" id="total-mutes">0</div>
+            <div class="stat-label">Total Mutes</div>
           </div>
           <div class="stat-card">
-            <div class="stat-number">0</div>
-            <div class="stat-label">This Month</div>
+            <div class="stat-number" id="monthly-blocks">0</div>
+            <div class="stat-label">Blocks This Month</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" id="monthly-mutes">0</div>
+            <div class="stat-label">Mutes This Month</div>
           </div>
         </div>
       </div>
