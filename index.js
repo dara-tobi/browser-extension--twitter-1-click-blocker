@@ -424,6 +424,40 @@ class TwitterBlocker {
     const tweetDiv = menuOptionsButton.closest("article");
     this.hideElement(tweetDiv);
   }
+
+  async handleEngagementPages(mutation) {
+    if (!await this.shouldShowButtonOnPage('engagements')) return;
+
+    const userCell = mutation.target.querySelector(CONFIG.selectors.userCell);
+    if (!userCell) return;
+
+    const userActions = userCell.querySelector(CONFIG.selectors.userActions);
+    if (!userActions || userActions.parentElement.querySelector(`.${CONFIG.classes.blockButton}`)) return;
+
+    const blockButton = new ProfileBlockButtonUI(this.blockerBgColor, this.blockerColor)
+      .create('engagements-page');
+    userActions.parentElement.appendChild(blockButton);
+    blockButton.classList.add(CONFIG.classes.blockButton);
+
+    blockButton.addEventListener('click', () => {
+      userActions.click();
+      this.triggerMenuOptionClick();
+    });
+  }
+
+  handleBlockCompletion(mutation) {
+    const mutationString = Array.from(mutation.addedNodes)
+      .map(node => node.outerHTML)
+      .join("");
+
+    // Check for block completion message
+    if (mutationString.includes("blocked") || mutationString.includes("muted")) {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("block")) {
+        window.close();
+      }
+    }
+  }
 }
 
 class BlockButtonUI {
