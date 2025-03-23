@@ -10,6 +10,10 @@
       "js": ["settings.js", "index.js"]
     }
   ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "description": "Block users on Twitter in one click instead of 3. Block from any page where users are listed (/retweets, /followers, etc)!",
   "icons": {
     "48": "images/one-click-blocker.png"

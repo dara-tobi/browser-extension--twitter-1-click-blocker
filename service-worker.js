@@ -48,5 +48,10 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     });
   }
 
+  // handle open_options messages from the content script
+  if (message.type === "open_options") {
+    chrome.runtime.openOptionsPage();
+  }
+
   // sendResponse("Message " + message + " received in service worker!");
 });

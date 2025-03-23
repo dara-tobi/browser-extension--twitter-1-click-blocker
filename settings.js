@@ -98,52 +98,14 @@ class SettingsUI {
       .settings-button-inner button:hover {
         background-color: rgba(15, 20, 25, 0.1);
       }
-      
-      .one-click-blocker-settings-panel {
-        position: fixed;
-        right: 16px;
-        bottom: 80px;
-        width: 400px;
-        background-color: white;
-        border-radius: 16px;
-        box-shadow: rgb(101 119 134 / 20%) 0px 0px 15px, rgb(101 119 134 / 15%) 0px 0px 3px 1px;
-        z-index: 9999;
-        padding: 16px;
-      }
-      
-      .settings-panel-header {
-        font-size: 20px;
-        font-weight: bold;
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid rgb(239, 243, 244);
-      }
-      
-      .settings-section {
-        margin-bottom: 24px;
-      }
-      
-      .settings-section-title {
-        font-size: 15px;
-        font-weight: bold;
-        margin-bottom: 12px;
-      }
-      
-      .radio-group, .checkbox-group {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-      
-      .radio-option, .checkbox-option {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
     `;
     document.head.appendChild(style);
 
-    button.addEventListener('click', () => this.toggleSettingsPanel());
+    // Open options page when clicked
+    button.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'open_options' });
+    });
+
     return button;
   }
 

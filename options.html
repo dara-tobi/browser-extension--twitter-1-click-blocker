@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>One-Click Blocker Settings</title>
+  <style>
+    :root {
+      --twitter-blue: rgb(29, 155, 240);
+      --twitter-background: rgb(239, 243, 244);
+      --twitter-border: rgb(207, 217, 222);
+      --twitter-text: rgb(15, 20, 25);
+      --twitter-hover: rgba(15, 20, 25, 0.1);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: white;
+      color: var(--twitter-text);
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      padding: 16px;
+      border-bottom: 1px solid var(--twitter-border);
+      position: sticky;
+      top: 0;
+      background: white;
+      z-index: 1000;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: bold;
+      margin: 0;
+    }
+
+    .nav {
+      display: flex;
+      gap: 16px;
+      padding: 16px;
+      border-bottom: 1px solid var(--twitter-border);
+    }
+
+    .nav-item {
+      padding: 12px 16px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.2s;
+    }
+
+    .nav-item:hover {
+      background-color: var(--twitter-hover);
+    }
+
+    .nav-item.active {
+      color: var(--twitter-blue);
+    }
+
+    .section {
+      padding: 20px;
+      border-bottom: 1px solid var(--twitter-border);
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 16px;
+    }
+
+    .option-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+    }
+
+    .option:hover {
+      background-color: var(--twitter-background);
+    }
+
+    .option label {
+      cursor: pointer;
+    }
+
+    input[type="radio"],
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .button {
+      background-color: var(--twitter-blue);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .button:hover {
+      background-color: rgb(26, 140, 216);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background-color: var(--twitter-background);
+      padding: 16px;
+      border-radius: 16px;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      color: rgb(83, 100, 113);
+    }
+
+    #blocked-users-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .blocked-user {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background-color: var(--twitter-background);
+      border-radius: 8px;
+    }
+
+    .blocked-user-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .save-notice {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: var(--twitter-blue);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 20px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .save-notice.visible {
+      opacity: 1;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>One-Click Blocker Settings</h1>
+  </div>
+
+  <div class="nav">
+    <div class="nav-item active" data-tab="settings">Settings</div>
+    <div class="nav-item" data-tab="blocked">Blocked Users</div>
+    <div class="nav-item" data-tab="stats">Statistics</div>
+    <div class="nav-item" data-tab="backup">Backup & Restore</div>
+  </div>
+
+  <div class="container">
+    <div id="settings" class="tab-content active">
+      <div class="section">
+        <div class="section-title">Default Action</div>
+        <div class="option-group">
+          <div class="option">
+            <input type="radio" id="action-block" name="action" value="block">
+            <label for="action-block">Block</label>
+          </div>
+          <div class="option">
+            <input type="radio" id="action-mute" name="action" value="mute">
+            <label for="action-mute">Mute</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Show Button On</div>
+        <div class="option-group">
+          <div class="option">
+            <input type="checkbox" id="page-timeline" name="pages" value="timeline">
+            <label for="page-timeline">Timeline</label>
+          </div>
+          <div class="option">
+            <input type="checkbox" id="page-followers" name="pages" value="followers">
+            <label for="page-followers">Followers</label>
+          </div>
+          <div class="option">
+            <input type="checkbox" id="page-following" name="pages" value="following">
+            <label for="page-following">Following</label>
+          </div>
+          <div class="option">
+            <input type="checkbox" id="page-search" name="pages" value="search">
+            <label for="page-search">Search Results</label>
+          </div>
+          <div class="option">
+            <input type="checkbox" id="page-communities" name="pages" value="communities">
+            <label for="page-communities">Communities</label>
+          </div>
+          <div class="option">
+            <input type="checkbox" id="page-engagements" name="pages" value="engagements">
+            <label for="page-engagements">Engagements</label>
+          </div>
+          <div class="option">
+            <input type="checkbox" id="page-status" name="pages" value="status">
+            <label for="page-status">Tweet Replies</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="blocked" class="tab-content">
+      <div class="section">
+        <div class="section-title">Blocked Users</div>
+        <div id="blocked-users-list">
+          <!-- Will be populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+
+    <div id="stats" class="tab-content">
+      <div class="section">
+        <div class="section-title">Block Statistics</div>
+        <div class="stats">
+          <div class="stat-card">
+            <div class="stat-number">0</div>
+            <div class="stat-label">Total Blocks</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">0</div>
+            <div class="stat-label">This Week</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">0</div>
+            <div class="stat-label">This Month</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="backup" class="tab-content">
+      <div class="section">
+        <div class="section-title">Backup & Restore</div>
+        <div class="option-group">
+          <button class="button" id="export-data">Export Data</button>
+          <button class="button" id="import-data">Import Data</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="save-notice">Settings saved!</div>
+
+  <script src="options.js"></script>
+</body>
+</html> 
