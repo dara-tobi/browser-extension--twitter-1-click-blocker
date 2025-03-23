@@ -163,10 +163,26 @@ class TwitterBlocker {
     const blockButton = document.querySelector(CONFIG.selectors.blockButton);
     if (!blockButton) return null;
     
-    const muteButton = blockButton.previousElementSibling?.previousElementSibling;
+    // Use the same profile page detection as elsewhere in the code
+    const currentUsername = location.pathname.split("/")[1];
+    const isProfilePage = !!document.querySelector(
+      `[data-testid="UserAvatar-Container-${currentUsername}"]`
+    );
+    
+    // On profile page, mute button is directly before block button
+    // On timeline, mute button is two elements before block button
+    const muteButton = isProfilePage ? 
+      blockButton.previousElementSibling : 
+      blockButton.previousElementSibling?.previousElementSibling;
+    
     if (muteButton?.textContent?.toLowerCase().includes('@') && !muteButton.textContent.toLowerCase().includes('conversation')) {
+      console.log('🔊 Found mute button:', muteButton);
       return muteButton;
     }
+    console.log('blockButton', blockButton);
+    console.log('blockButton.previousElementSibling', blockButton.previousElementSibling);
+    console.log('blockButton.previousElementSibling?.previousElementSibling', blockButton.previousElementSibling?.previousElementSibling);
+    console.log('❌ No mute button found', muteButton, 'isProfilePage', isProfilePage);
     return null;
   }
 
@@ -298,7 +314,7 @@ class TwitterBlocker {
   }
 
   addProfileBlockButton(userActionsButton) {
-    const blockButton = new ProfileBlockButtonUI(this.blockerBgColor, this.blockerColor)
+    const blockButton = new ProfileBlockButtonUI(this.blockerBgColor, this.blockerColor, this.settingsManager)
       .create();
     userActionsButton.parentElement.appendChild(blockButton);
     blockButton.classList.add(CONFIG.classes.blockButton);
@@ -427,7 +443,7 @@ class TwitterBlocker {
 
   hideTweetDiv(menuOptionsButton) {
     const tweetDiv = menuOptionsButton.closest("article");
-    this.hideElement(tweetDiv);
+    // this.hideElement(tweetDiv);
   }
 
   async handleEngagementPages(mutation) {
@@ -439,7 +455,7 @@ class TwitterBlocker {
     const userActions = userCell.querySelector(CONFIG.selectors.userActions);
     if (!userActions || userActions.parentElement.querySelector(`.${CONFIG.classes.blockButton}`)) return;
 
-    const blockButton = new ProfileBlockButtonUI(this.blockerBgColor, this.blockerColor)
+    const blockButton = new ProfileBlockButtonUI(this.blockerBgColor, this.blockerColor, this.settingsManager)
       .create('engagements-page');
     userActions.parentElement.appendChild(blockButton);
     blockButton.classList.add(CONFIG.classes.blockButton);
@@ -649,6 +665,11 @@ class BlockButtonUI {
 }
 
 class ProfileBlockButtonUI extends BlockButtonUI {
+  constructor(bgColor, color, settingsManager) {
+    super(bgColor, color);
+    this.settingsManager = settingsManager;
+  }
+
   create(page) {
     const button = document.createElement("div");
     Object.assign(button.style, {
@@ -679,7 +700,7 @@ class ProfileBlockButtonUI extends BlockButtonUI {
   }
 
   addHoverEffects(button) {
-    button.addEventListener("mouseenter", () => {
+    button.addEventListener("mouseenter", async () => {
       Object.assign(button.style, {
         backgroundColor: "rgba(255,0,64, 0.1)",
         transform: "rotate(270deg)"
@@ -694,7 +715,8 @@ class ProfileBlockButtonUI extends BlockButtonUI {
       // Add tooltip for profile
       const username = location.pathname.split("/")[1];
       if (username) {
-        this.addBlockButtonHoverTitle(button, "@" + username, true);
+        const action = await this.settingsManager?.loadSettings().then(settings => settings.action || 'block');
+        this.addBlockButtonHoverTitle(button, "@" + username, true, action);
       }
     });
 
