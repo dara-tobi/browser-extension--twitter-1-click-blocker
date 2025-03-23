@@ -164,10 +164,7 @@ class TwitterBlocker {
     if (!blockButton) return null;
     
     // Use the same profile page detection as elsewhere in the code
-    const currentUsername = location.pathname.split("/")[1];
-    const isProfilePage = !!document.querySelector(
-      `[data-testid="UserAvatar-Container-${currentUsername}"]`
-    );
+    const isProfilePage = document.querySelector(CONFIG.selectors.userActions);
     
     // On profile page, mute button is directly before block button
     // On timeline, mute button is two elements before block button
@@ -294,12 +291,21 @@ class TwitterBlocker {
 
   getProfilePageInfo() {
     const currentUsername = location.pathname.split("/")[1];
-    const isProfilePage = !!document.querySelector(
-      `[data-testid="UserAvatar-Container-${currentUsername}"]`
-    );
-    const isOwnProfilePage = this.ownUsername?.split("@")?.[1] === currentUsername;
+    let isProfilePage = () => {
+      return !!document.querySelector(CONFIG.selectors.userActions);
+    };
+    
+    let isOwnProfilePage = () => {
+      return (
+        document
+          .querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')
+          ?.querySelector("[tabindex]")
+          ?.textContent?.split("@")?.[1] ==
+        location.pathname.split("/")[location.pathname.split("/").length - 1]
+      );
+    };
 
-    return { isProfilePage, isOwnProfilePage };
+    return { isProfilePage: isProfilePage(), isOwnProfilePage: isOwnProfilePage() };
   }
 
   getUserActionsButton(mutation) {
