@@ -52,6 +52,11 @@ class TwitterBlocker {
     this.blockerBgColor = document.querySelector("meta[name=theme-color]")?.content;
     this.blockerColor = CONFIG.colors[this.blockerBgColor];
 
+    // Initialize settings
+    this.settingsManager = new window.OneClickBlockerSettings.SettingsManager();
+    this.settingsUI = new window.OneClickBlockerSettings.SettingsUI(this.settingsManager);
+    this.settingsUI.mount();
+
     this.initMutationObserver();
     this.initMessageListener();
   }

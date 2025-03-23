@@ -3,10 +3,11 @@
   "background": {
     "service_worker": "service-worker.js"
   },
+  "permissions": ["storage"],
   "content_scripts": [
     {
       "matches": ["https://*.x.com/*", "https://x.com/*", "https://*.twitter.com/*", "https://twitter.com/*"],
-      "js": ["index.js"]
+      "js": ["settings.js", "index.js"]
     }
   ],
   "description": "Block users on Twitter in one click instead of 3. Block from any page where users are listed (/retweets, /followers, etc)!",
