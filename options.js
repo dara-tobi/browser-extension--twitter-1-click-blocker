@@ -8,13 +8,20 @@ const DEFAULT_SETTINGS = {
     search: true,
     communities: true,
     engagements: true,
-    status: true
+    status: true,
+    trending: true,
+    notifications: true,
+    hashtag: true,
+    profile: true,
+    explore: true
   },
   stats: {
     totalBlocks: 0,
+    totalMutes: 0,
     weeklyBlocks: 0,
     monthlyBlocks: 0,
-    blockedUsers: []
+    blockedUsers: [],
+    mutedUsers: []
   }
 };
 

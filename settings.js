@@ -12,7 +12,16 @@ const DEFAULT_SETTINGS = {
         hashtag: true,
         trending: true,
         notifications: true,
-        profile: true
+        profile: true,
+        explore: true
+    },
+    stats: {
+        totalBlocks: 0,
+        totalMutes: 0,
+        monthlyBlocks: 0,
+        monthlyMutes: 0,
+        blockedUsers: [],
+        mutedUsers: []
     }
 };
 

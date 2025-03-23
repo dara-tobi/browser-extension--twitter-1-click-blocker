@@ -446,6 +446,10 @@ class TwitterBlocker {
     if (document.querySelector(CONFIG.selectors.userActions)) {
       return 'profile';
     }
+
+    if (path.includes('/explore')) {
+      return 'explore';
+    }
     
     return null;
   }
@@ -546,7 +550,13 @@ class TwitterBlocker {
       .join("");
 
     // Check for block completion message
-    if (mutationString.includes("blocked") || mutationString.includes("muted")) {
+    const isBlocked = mutationString.includes("blocked");
+    const isMuted = mutationString.includes("muted");
+    
+    if (isBlocked || isMuted) {
+      const username = location.pathname.split("/")[1];
+      this.saveUserToStorage(username, isBlocked ? 'block' : 'mute');
+      
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get("block")) {
         window.close();
@@ -554,6 +564,38 @@ class TwitterBlocker {
     }
 
     this.informBackgroundScriptOfBlockCompletion(mutation);
+  }
+
+  async saveUserToStorage(username, action) {
+    try {
+      const settings = await this.settingsManager.loadSettings();
+      
+      // Initialize stats if they don't exist
+      if (!settings.stats) {
+        settings.stats = {
+          totalBlocks: 0,
+          totalMutes: 0,
+          blockedUsers: [],
+          mutedUsers: []
+        };
+      }
+      
+      if (action === 'block') {
+        if (!settings.stats.blockedUsers.includes(username)) {
+          settings.stats.blockedUsers.push(username);
+          settings.stats.totalBlocks++;
+        }
+      } else if (action === 'mute') {
+        if (!settings.stats.mutedUsers.includes(username)) {
+          settings.stats.mutedUsers.push(username);
+          settings.stats.totalMutes++;
+        }
+      }
+      
+      await this.settingsManager.saveSettings(settings);
+    } catch (error) {
+      console.error('Error saving user to storage:', error);
+    }
   }
 
   informBackgroundScriptOfBlockCompletion(mutation) {
