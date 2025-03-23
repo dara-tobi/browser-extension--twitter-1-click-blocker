@@ -160,8 +160,13 @@ class TwitterBlocker {
   }
 
   getMuteButton() {
-    // This will be replaced with actual mute button selector logic
-    // For now, return null to avoid errors
+    const blockButton = document.querySelector(CONFIG.selectors.blockButton);
+    if (!blockButton) return null;
+    
+    const muteButton = blockButton.previousElementSibling?.previousElementSibling;
+    if (muteButton?.textContent?.toLowerCase().includes('@') && !muteButton.textContent.toLowerCase().includes('conversation')) {
+      return muteButton;
+    }
     return null;
   }
 
