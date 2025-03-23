@@ -201,12 +201,13 @@
   <div class="nav">
     <div class="nav-item active" data-tab="settings">Settings</div>
     <div class="nav-item" data-tab="blocked">Blocked Users</div>
+    <div class="nav-item" data-tab="muted">Muted Users</div>
     <div class="nav-item" data-tab="stats">Statistics</div>
     <div class="nav-item" data-tab="backup">Backup & Restore</div>
   </div>
 
   <div class="container">
-    <div id="settings" class="tab-content active">
+    <div id="settings" class="tab-content">
       <div class="section">
         <div class="section-title">Default Action</div>
         <div class="option-group">
@@ -283,6 +284,9 @@
           <!-- Will be populated by JavaScript -->
         </div>
       </div>
+    </div>
+
+    <div id="muted" class="tab-content active">
       <div class="section">
         <div class="section-title">Muted Users</div>
         <div id="muted-users-list">

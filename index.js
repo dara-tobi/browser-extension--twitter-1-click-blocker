@@ -541,21 +541,57 @@ class TwitterBlocker {
       .map(node => node.outerHTML)
       .join("");
 
-    // Check for block completion message
+    // Check for block/mute completion message
     const isBlocked = mutationString.includes("blocked");
     const isMuted = mutationString.includes("muted");
     
     if (isBlocked || isMuted) {
-      const username = location.pathname.split("/")[1];
-      this.saveUserToStorage(username, isBlocked ? 'block' : 'mute');
-      
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("block")) {
-        window.close();
+      const isFromUrl = urlParams.get("block") || urlParams.get("mute");
+      
+      let username;
+      if (isFromUrl) {
+        // If blocking from URL (e.g. auto-block), get username from URL
+        username = location.pathname.split("/")[1];
+      } else {
+        // If blocking from tweet/profile, try multiple ways to get the username
+        // First try the stored username from the action button
+        if (this.usernameToAction) {
+          username = this.usernameToAction;
+        } else {
+          // Try to get it from the User-Name element
+          const userNameElement = mutation.target.querySelector(CONFIG.selectors.userName);
+          if (userNameElement) {
+            const userLink = userNameElement.querySelector('a[href^="/"]');
+            if (userLink) {
+              username = userLink.getAttribute('href').substring(1);
+            }
+          }
+          
+          // If still no username, try getting it from the dialog text
+          if (!username) {
+            const dialog = mutation.target.querySelector(CONFIG.selectors.confirmationDialog);
+            if (dialog) {
+              const dialogText = dialog.textContent;
+              const matches = dialogText.match(/@(\w+)/);
+              if (matches && matches[1]) {
+                username = matches[1];
+              }
+            }
+          }
+        }
+      }
+
+      if (username) {
+        this.saveUserToStorage(username, isBlocked ? 'block' : 'mute');
+        
+        if (isFromUrl) {
+          window.close();
+        }
       }
     }
 
-    this.informBackgroundScriptOfBlockCompletion(mutation);
+    this.informBackgroundScriptOfActionCompletion(mutation);
   }
 
   async saveUserToStorage(username, action) {
@@ -571,16 +607,20 @@ class TwitterBlocker {
           mutedUsers: []
         };
       }
+
+      // Ensure arrays exist
+      if (!settings.stats.blockedUsers) settings.stats.blockedUsers = [];
+      if (!settings.stats.mutedUsers) settings.stats.mutedUsers = [];
       
       if (action === 'block') {
         if (!settings.stats.blockedUsers.includes(username)) {
           settings.stats.blockedUsers.push(username);
-          settings.stats.totalBlocks++;
+          settings.stats.totalBlocks = (settings.stats.totalBlocks || 0) + 1;
         }
       } else if (action === 'mute') {
         if (!settings.stats.mutedUsers.includes(username)) {
           settings.stats.mutedUsers.push(username);
-          settings.stats.totalMutes++;
+          settings.stats.totalMutes = (settings.stats.totalMutes || 0) + 1;
         }
       }
       
@@ -590,19 +630,29 @@ class TwitterBlocker {
     }
   }
 
-  informBackgroundScriptOfBlockCompletion(mutation) {
-    if (!location.href.includes("block=true")) {
+  informBackgroundScriptOfActionCompletion(mutation) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const isBlock = urlParams.get("block");
+    const isMute = urlParams.get("mute");
+
+    if (!isBlock && !isMute) {
       return;
     }
+
+    const username = location.pathname.split("/")[1];
+    const action = isBlock ? "block" : "mute";
 
     if (
       mutation.target
         .querySelector(CONFIG.selectors.placementTracking)
-        ?.querySelector('[data-testid*="unblock"]')
+        ?.querySelector(`[data-testid*="un${action}"]`)
     ) {
-      const username = location.pathname.split("/")[1];
       chrome.runtime.sendMessage(
-        { type: "feedback", data: "block_button_clicked", username }
+        { 
+          type: "feedback", 
+          data: `${action}_button_clicked`, 
+          username 
+        }
       );
     }
   }
@@ -610,8 +660,10 @@ class TwitterBlocker {
   autoBlockUserFromProfilePageParam(mutation) {
     const urlParams = new URLSearchParams(window.location.search);
     const block = urlParams.get("block");
+    const mute = urlParams.get("mute");
+    const action = block ? "block" : "mute";
 
-    if (!block) return;
+    if (!block && !mute) return;
 
     if (
       document
@@ -625,9 +677,9 @@ class TwitterBlocker {
       return;
     }
 
-    const blockButton = document.querySelector(".sw-profile-block-button");
-    if (blockButton) {
-      blockButton.click();
+    const actionButton = document.querySelector(".sw-profile-block-button");
+    if (actionButton) {
+      actionButton.click();
       chrome.runtime.sendMessage({
         type: "feedback",
         data: "sending message to background script after receiving one"

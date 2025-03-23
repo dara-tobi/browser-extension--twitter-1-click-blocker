@@ -21,18 +21,23 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       });
     }
 
-    if (message.data === "block_button_clicked") {
+    if (message.data === "block_button_clicked" || message.data === "mute_button_clicked") {
       let username = message.username;
+      let action = message.data === "block_button_clicked" ? "block" : "mute";
 
       await chrome.tabs.remove(sender.tab.id);
       // get active tab
       chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        // send finished_blocking message to the active tab, so that it can remove the relevant (blocked) username div from the engagement page
+        // send finished_action message to the active tab
         chrome.tabs.sendMessage(
           tabs[0].id,
-          { type: "finished_blocking", username: username },
+          { 
+            type: "finished_" + action + "ing", 
+            username: username,
+            action: action 
+          },
           function (response) {
-            // console.log('user blocked');
+            // console.log('action completed');
           }
         );
       });
@@ -41,9 +46,9 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 
   // handle open_tab messages from the content script
   if (message.type == "open_tab" && message.username !== undefined) {
-    // console.log("Opening tab for username:", message.username);
+    const action = message.mute ? "mute" : "block";
     chrome.tabs.create({
-      url: `https://x.com/${message.username}?block=true`,
+      url: `https://x.com/${message.username}?${action}=true`,
       active: false,
     });
   }
