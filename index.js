@@ -87,6 +87,8 @@ class TwitterBlocker {
     this.handleEngagementPages(mutation);
     this.handleBlockCompletion(mutation);
     this.handleGrokButtonOverlap(mutation);
+    this.addBlockButtonsToEngagementsPages(mutation);
+    // this.addBlockAllButtonToEngagementsPages(mutation);
   }
 
   initMessageListener() {
@@ -481,6 +483,205 @@ class TwitterBlocker {
         window.close();
       }
     }
+
+    this.informBackgroundScriptOfBlockCompletion(mutation);
+  }
+
+  informBackgroundScriptOfBlockCompletion(mutation) {
+    if (!location.href.includes("block=true")) {
+      return;
+    }
+
+    if (
+      mutation.target
+        .querySelector(CONFIG.selectors.placementTracking)
+        ?.querySelector('[data-testid*="unblock"]')
+    ) {
+      const username = location.pathname.split("/")[1];
+      chrome.runtime.sendMessage(
+        { type: "feedback", data: "block_button_clicked", username }
+      );
+    }
+  }
+
+  autoBlockUserFromProfilePageParam(mutation) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const block = urlParams.get("block");
+
+    if (!block) return;
+
+    if (
+      document
+        .querySelector(CONFIG.selectors.primaryColumn)
+        .textContent.includes("Something went wrong")
+    ) {
+      this.somethingWentWrong = true;
+      chrome.runtime.sendMessage(
+        { type: "feedback", data: "something_went_wrong" }
+      );
+      return;
+    }
+
+    const blockButton = document.querySelector(".sw-profile-block-button");
+    if (blockButton) {
+      blockButton.click();
+      chrome.runtime.sendMessage({
+        type: "feedback",
+        data: "sending message to background script after receiving one"
+      });
+    }
+  }
+
+  autoBlockUserFromStatusPageParam() {
+    const username = location.pathname.split("/")[1];
+    const statusId = location.pathname.split("/").pop();
+    const urlParams = new URLSearchParams(window.location.search);
+    const block = urlParams.get("block");
+
+    if (!block) return;
+
+    const blockButtons = document.querySelectorAll(".sw-block-button");
+    for (const blockButton of blockButtons) {
+      if (
+        blockButton.closest("article").querySelector(`a[href*="${statusId}"]`)
+      ) {
+        blockButton.click();
+        chrome.runtime.sendMessage(
+          { type: "feedback", data: "block_button_clicked", username }
+        );
+        break;
+      }
+    }
+  }
+
+  sendBlockRequest(username) {
+    chrome.runtime.sendMessage({ type: "open_tab", username, block: true });
+  }
+
+  addBlockButtonsToEngagementsPages(mutation) {    
+    if (
+      !mutation.target.querySelector(CONFIG.selectors.cellInnerDiv) ||
+      !mutation.target.querySelector(CONFIG.selectors.cellInnerDiv).textContent
+    ) {
+      return;
+    }
+
+    const followButtons = mutation.target.querySelectorAll(CONFIG.selectors.followButton);
+
+    followButtons.forEach((followButton) => {
+      if (followButton.closest(CONFIG.selectors.hoverCard)) return;
+
+      if (
+        followButton &&
+        !followButton.parentElement.querySelector(".sw-block-button")
+      ) {
+        const followButtonParentTweet = followButton.closest(CONFIG.selectors.tweet);
+        if (followButtonParentTweet) return;
+
+        const blockButton = new ProfileBlockButtonUI(this.blockerBgColor, this.blockerColor, this.settingsManager)
+          .create("engagements-page");
+        followButton.parentElement.appendChild(blockButton);
+        followButton.parentElement.style.flexDirection = "row";
+        blockButton.classList.add("sw-block-button");
+        
+        blockButton.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+
+          const username = followButton?.getAttribute("aria-label")?.split("@")?.[1];
+          this.sendBlockRequest(username);
+        });
+      }
+    });
+  }
+
+  createBlockAllButton() {
+    const blockAllButton = document.createElement("button");
+    blockAllButton.textContent = "Block All";
+    blockAllButton.id = "block-all-button";
+    Object.assign(blockAllButton.style, {
+      backgroundColor: this.blockerBgColor,
+      border: "none",
+      padding: "10px",
+      cursor: "pointer",
+      borderRadius: "5px",
+      marginRight: "20px",
+      fontSize: "1em",
+      transition: "all 0.1s ease-in-out",
+      boxSizing: "border-box",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      placeSelf: "center",
+      height: "35px",
+      width: "120px",
+      color: "firebrick",
+      marginTop: "5px",
+      marginBottom: "5px"
+    });
+
+    blockAllButton.addEventListener("mouseenter", () => {
+      Object.assign(blockAllButton.style, {
+        backgroundColor: "peachpuff",
+        color: "crimson",
+        fontSize: "1.1em"
+      });
+    });
+
+    blockAllButton.addEventListener("mouseleave", () => {
+      Object.assign(blockAllButton.style, {
+        backgroundColor: this.blockerBgColor,
+        color: "firebrick",
+        fontSize: "1em"
+      });
+    });
+
+    return blockAllButton;
+  }
+
+  async waitForUsernamesRemoved(usernames) {
+    let allRemoved = false;
+    let waitDuration = 1000;
+    
+    while (!allRemoved) {
+      await new Promise((resolve) => setTimeout(resolve, waitDuration));
+
+      if (this.somethingWentWrong) {
+        console.log("something went wrong, waiting for 60 seconds");
+        waitDuration = 60000;
+      }
+
+      allRemoved = usernames.every(
+        (username) => !document.querySelector(`[href="/${username}"]`)
+      );
+    }
+  }
+
+  addBlockAllButtonToEngagementsPages(mutation) {
+    const nav = mutation.target.querySelector("[href*=retweets]")?.closest("nav");
+    if (!nav || document.querySelector("#block-all-button")) return;
+
+    const blockAllButton = this.createBlockAllButton();
+    nav.parentElement.insertBefore(blockAllButton, nav.nextSibling);
+
+    blockAllButton.addEventListener("click", async () => {
+      while (true) {
+        const followButtons = Array.from(
+          document.querySelectorAll(CONFIG.selectors.followButton)
+        );
+        if (followButtons.length === 0) break;
+
+        const batch = followButtons.slice(0, 5);
+        const usernames = batch.map((followButton) => {
+          const username = followButton?.getAttribute("aria-label")?.split("@")?.[1];
+          this.sendBlockRequest(username);
+          return username;
+        });
+
+        await this.waitForUsernamesRemoved(usernames);
+      }
+    });
   }
 }
 
@@ -591,6 +792,7 @@ class BlockButtonUI {
 
       // Add tooltip
       const username = button.closest(`.${CONFIG.classes.blockButtonWrapper}`)?.dataset.username;
+      console.log('🔍 Username:', username);
       if (username) {
         this.addBlockButtonHoverTitle(button, username, false, action);
       }
@@ -642,7 +844,7 @@ class BlockButtonUI {
     titleParent.style.pointerEvents = "none";
     titleParent.style.minHeight = "20px";
     titleParent.style.borderRadius = "2px";
-
+    console.log('inner 🔍 Username:', username);
     titleParent.innerHTML = `
       <div role="tooltip">
         <span dir="ltr" data-testid="HoverLabel" style="font-weight: 400; color: #fff; font-family: 'TwitterChirp', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
@@ -717,6 +919,7 @@ class ProfileBlockButtonUI extends BlockButtonUI {
 
       // Add tooltip for profile
       const username = location.pathname.split("/")[1];
+      console.log('outer 🔍 Username:', username);
       if (username) {
         const action = await this.settingsManager?.loadSettings().then(settings => settings.action || 'block');
         this.addBlockButtonHoverTitle(button, "@" + username, true, action);
