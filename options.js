@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS = {
     profile: true,
     explore: true
   },
+  showSettingsIcon: true,
   stats: {
     totalBlocks: 0,
     totalMutes: 0,
@@ -47,6 +48,7 @@ class OptionsManager {
         Array.from(document.querySelectorAll('input[name="pages"]'))
           .map(checkbox => [checkbox.value, checkbox.checked])
       ),
+      showSettingsIcon: document.getElementById('show-settings-icon').checked,
       stats: await this.getStats()
     };
 
@@ -73,6 +75,10 @@ class OptionsManager {
       const checkbox = document.querySelector(`input[name="pages"][value="${page}"]`);
       if (checkbox) checkbox.checked = enabled;
     });
+
+    // Update interface settings
+    const showSettingsIcon = document.getElementById('show-settings-icon');
+    if (showSettingsIcon) showSettingsIcon.checked = settings.showSettingsIcon ?? true;
 
     // Update stats
     if (settings.stats) {

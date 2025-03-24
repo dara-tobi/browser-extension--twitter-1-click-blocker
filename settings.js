@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS = {
         profile: true,
         explore: true
     },
+    showSettingsIcon: true,
     stats: {
         totalBlocks: 0,
         totalMutes: 0,
@@ -54,6 +55,28 @@ class SettingsUI {
     constructor(settingsManager) {
         this.settingsManager = settingsManager;
         this.isOpen = false;
+        this.button = null;
+        this.init();
+    }
+
+    async init() {
+        // Wait for settings to be loaded
+        const settings = await this.settingsManager.loadSettings();
+        if (settings.showSettingsIcon === true) {
+            this.mount();
+        }
+
+        // Listen for settings changes
+        chrome.storage.onChanged.addListener((changes, namespace) => {
+            if (namespace === 'sync' && changes.settings?.newValue?.showSettingsIcon !== undefined) {
+                const showIcon = changes.settings.newValue.showSettingsIcon === true;
+                if (showIcon && !this.button) {
+                    this.mount();
+                } else if (!showIcon && this.button) {
+                    this.unmount();
+                }
+            }
+        });
     }
 
     createSettingsButton() {
@@ -249,12 +272,24 @@ class SettingsUI {
         this.settingsManager.saveSettings(newSettings);
     }
 
-    mount() {
-        const settingsButton = this.createSettingsButton();
+    async mount() {
+        const settings = await this.settingsManager.loadSettings();
+        if (settings.showSettingsIcon !== true) {
+            return;
+        }
+
+        this.button = this.createSettingsButton();
         const settingsPanel = this.createSettingsPanel();
 
-        document.body.appendChild(settingsButton);
+        document.body.appendChild(this.button);
         document.body.appendChild(settingsPanel);
+    }
+
+    unmount() {
+        if (this.button) {
+            this.button.remove();
+            this.button = null;
+        }
     }
 }
 
