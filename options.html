@@ -76,6 +76,12 @@
       margin-bottom: 16px;
     }
 
+    .section-subtitle {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
     .option-group {
       display: flex;
       flex-direction: column;
@@ -190,6 +196,12 @@
 
     .tab-content.active {
       display: block;
+    }
+
+    .export-options {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
   </style>
 </head>
@@ -323,6 +335,21 @@
       <div class="section">
         <div class="section-title">Backup & Restore</div>
         <div class="option-group">
+          <div class="section-subtitle">Select what to export:</div>
+          <div class="export-options">
+            <div class="option">
+              <input type="checkbox" id="export-blocks" name="export-options" value="blocks" checked>
+              <label for="export-blocks">Blocked Users</label>
+            </div>
+            <div class="option">
+              <input type="checkbox" id="export-mutes" name="export-options" value="mutes" checked>
+              <label for="export-mutes">Muted Users</label>
+            </div>
+            <div class="option">
+              <input type="checkbox" id="export-settings" name="export-options" value="settings" checked>
+              <label for="export-settings">Settings</label>
+            </div>
+          </div>
           <button class="button" id="export-data">Export Data</button>
           <button class="button" id="import-data">Import Data</button>
         </div>

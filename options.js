@@ -182,7 +182,33 @@ class OptionsManager {
       const result = await chrome.storage.sync.get('settings');
       const settings = result.settings || DEFAULT_SETTINGS;
       
-      const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+      // Get selected export options
+      const exportBlocks = document.getElementById('export-blocks').checked;
+      const exportMutes = document.getElementById('export-mutes').checked;
+      const exportSettings = document.getElementById('export-settings').checked;
+      
+      // Create a copy of settings to modify
+      let exportData = {};
+      
+      if (exportSettings) {
+        // Export general settings (action and enabledPages)
+        exportData.action = settings.action;
+        exportData.enabledPages = settings.enabledPages;
+      }
+      
+      // Initialize stats object if any stats are being exported
+      if (exportBlocks || exportMutes) {
+        exportData.stats = {
+          totalBlocks: exportBlocks ? settings.stats?.totalBlocks || 0 : 0,
+          totalMutes: exportMutes ? settings.stats?.totalMutes || 0 : 0,
+          monthlyBlocks: exportBlocks ? settings.stats?.monthlyBlocks || 0 : 0,
+          monthlyMutes: exportMutes ? settings.stats?.monthlyMutes || 0 : 0,
+          blockedUsers: exportBlocks ? settings.stats?.blockedUsers || [] : [],
+          mutedUsers: exportMutes ? settings.stats?.mutedUsers || [] : []
+        };
+      }
+      
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       
       const a = document.createElement('a');
