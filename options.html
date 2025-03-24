@@ -92,10 +92,9 @@
     .option {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 8px;
       border-radius: 4px;
       transition: background-color 0.2s;
+      padding: 0 12px;
     }
 
     .option:hover {
@@ -104,6 +103,11 @@
 
     .option label {
       cursor: pointer;
+      padding: 12px;
+      flex-grow: 1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
     input[type="radio"],
@@ -111,6 +115,8 @@
       width: 18px;
       height: 18px;
       cursor: pointer;
+      margin: 0;
+      flex-shrink: 0;
     }
 
     .button {
@@ -159,18 +165,16 @@
     }
 
     .blocked-user {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px;
+      display: block;
+      padding: 0;
       background-color: var(--twitter-background);
       border-radius: 8px;
+      transition: background-color 0.2s;
+      margin-bottom: 8px;
     }
 
-    .blocked-user-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+    .blocked-user:hover {
+      background-color: var(--twitter-hover);
     }
 
     .user-link {
@@ -178,11 +182,14 @@
       text-decoration: none;
       font-weight: 500;
       transition: color 0.2s;
+      display: block;
+      padding: 16px;
+      width: 100%;
+      box-sizing: border-box;
     }
 
     .user-link:hover {
       color: var(--twitter-blue);
-      text-decoration: underline;
     }
 
     .save-notice {
@@ -330,14 +337,6 @@
           <div class="stat-card">
             <div class="stat-number" id="total-mutes">0</div>
             <div class="stat-label">Total Mutes</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="monthly-blocks">0</div>
-            <div class="stat-label">Blocks This Month</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="monthly-mutes">0</div>
-            <div class="stat-label">Mutes This Month</div>
           </div>
         </div>
       </div>

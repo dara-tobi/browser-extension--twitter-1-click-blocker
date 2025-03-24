@@ -18,8 +18,6 @@ const DEFAULT_SETTINGS = {
   stats: {
     totalBlocks: 0,
     totalMutes: 0,
-    weeklyBlocks: 0,
-    monthlyBlocks: 0,
     blockedUsers: [],
     mutedUsers: []
   }
@@ -78,10 +76,11 @@ class OptionsManager {
 
     // Update stats
     if (settings.stats) {
-      document.getElementById('total-blocks').textContent = settings.stats.totalBlocks || 0;
-      document.getElementById('total-mutes').textContent = settings.stats.totalMutes || 0;
-      document.getElementById('monthly-blocks').textContent = settings.stats.monthlyBlocks || 0;
-      document.getElementById('monthly-mutes').textContent = settings.stats.monthlyMutes || 0;
+      const totalBlocks = document.getElementById('total-blocks');
+      const totalMutes = document.getElementById('total-mutes');
+      
+      if (totalBlocks) totalBlocks.textContent = settings.stats.totalBlocks || 0;
+      if (totalMutes) totalMutes.textContent = settings.stats.totalMutes || 0;
     }
 
     // Update blocked and muted users lists
@@ -93,9 +92,7 @@ class OptionsManager {
     const list = document.getElementById('blocked-users-list');
     list.innerHTML = users.length ? users.map(user => `
       <div class="blocked-user">
-        <div class="blocked-user-info">
-          <a href="https://twitter.com/${user}" target="_blank" class="user-link">@${user}</a>
-        </div>
+        <a href="https://twitter.com/${user}" target="_blank" class="user-link">@${user}</a>
       </div>
     `).join('') : '<p>No blocked users yet.</p>';
   }
@@ -104,9 +101,7 @@ class OptionsManager {
     const list = document.getElementById('muted-users-list');
     list.innerHTML = users.length ? users.map(user => `
       <div class="blocked-user">
-        <div class="blocked-user-info">
-          <a href="https://twitter.com/${user}" target="_blank" class="user-link">@${user}</a>
-        </div>
+        <a href="https://twitter.com/${user}" target="_blank" class="user-link">@${user}</a>
       </div>
     `).join('') : '<p>No muted users yet.</p>';
   }
@@ -167,8 +162,6 @@ class OptionsManager {
         exportData.stats = {
           totalBlocks: exportBlocks ? settings.stats?.totalBlocks || 0 : 0,
           totalMutes: exportMutes ? settings.stats?.totalMutes || 0 : 0,
-          monthlyBlocks: exportBlocks ? settings.stats?.monthlyBlocks || 0 : 0,
-          monthlyMutes: exportMutes ? settings.stats?.monthlyMutes || 0 : 0,
           blockedUsers: exportBlocks ? settings.stats?.blockedUsers || [] : [],
           mutedUsers: exportMutes ? settings.stats?.mutedUsers || [] : []
         };

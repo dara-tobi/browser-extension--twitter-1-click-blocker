@@ -18,8 +18,6 @@ const DEFAULT_SETTINGS = {
     stats: {
         totalBlocks: 0,
         totalMutes: 0,
-        monthlyBlocks: 0,
-        monthlyMutes: 0,
         blockedUsers: [],
         mutedUsers: []
     }

@@ -207,18 +207,10 @@ class TwitterBlocker {
 
   async addBlockButtonsToTimelines(mutation) {
     if (!await this.shouldShowButtonOnPage('timeline')) return;
-    
-    console.log('🔍 Checking for tweet to add action button to...');
     const wrapper = this.detectTweetUsernameWrapper(mutation);
-    console.log('📦 Found wrapper:', wrapper);
     if (wrapper) {
       const usernameDiv = wrapper.querySelector(CONFIG.selectors.userName);
       const menuButton = wrapper.querySelector(CONFIG.selectors.menuCaret);
-      console.log('🎯 Found elements:', { 
-        usernameDiv: !!usernameDiv, 
-        menuButton: !!menuButton,
-        usernameDivContent: usernameDiv?.innerHTML
-      });
       this.attachActionButton(usernameDiv, menuButton);
     }
   }
@@ -460,17 +452,13 @@ class TwitterBlocker {
   }
 
   async attachActionButton(userNameDiv, menuOptionsButton) {
-    console.log('🎨 Attempting to attach action button...');
     if (!userNameDiv) {
-      console.log('❌ No username div found');
       return;
     }
 
     const tweetUsername = userNameDiv.querySelectorAll("[href]")?.[1]?.textContent;
-    console.log('👤 Tweet username:', tweetUsername);
-    
+
     if (!this.shouldAddActionButton(tweetUsername)) {
-      console.log('⏭️ Skipping action button - own tweet or invalid username');
       return;
     }
 
@@ -481,13 +469,11 @@ class TwitterBlocker {
     this.addTweetActionButtonListeners(blockButton, menuOptionsButton);
     
     const menuOptionsWrapper = menuOptionsButton.parentElement;
-    console.log('📎 Inserting action button before menu options');
     menuOptionsWrapper.insertBefore(blockButton, menuOptionsButton);
 
     const grokButton = menuOptionsWrapper.closest('article')
       .querySelector(CONFIG.selectors.grokActions);
     if (grokButton) {
-      console.log('🤖 Adjusting position for Grok button');
       blockButton.style.right = '45px';
     }
   }
@@ -696,7 +682,6 @@ class TwitterBlocker {
   }
 
   sendBlockRequest(username) {
-    console.log('👤 Sending block request for:', username);
     chrome.runtime.sendMessage({ type: "open_tab", username, block: true });
   }
 
@@ -747,7 +732,6 @@ class TwitterBlocker {
           const username = followButton?.getAttribute("aria-label")?.split("@")?.[1];
           if (username) {
             this.usernameToAction = username;
-            console.log('👤 Username to action:', username);
             this.sendBlockRequest(username);
           }
         });
@@ -951,7 +935,6 @@ class BlockButtonUI {
 
       // Add tooltip
       const username = button.closest(`.${CONFIG.classes.blockButtonWrapper}`)?.dataset.username;
-      console.log('🔍 Username:', username);
       if (username) {
         this.addBlockButtonHoverTitle(button, username, false, action);
       }
@@ -1003,7 +986,6 @@ class BlockButtonUI {
     titleParent.style.pointerEvents = "none";
     titleParent.style.minHeight = "20px";
     titleParent.style.borderRadius = "2px";
-    console.log('inner 🔍 Username:', username);
     titleParent.innerHTML = `
       <div role="tooltip">
         <span dir="ltr" data-testid="HoverLabel" style="font-weight: 400; color: #fff; font-family: 'TwitterChirp', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
