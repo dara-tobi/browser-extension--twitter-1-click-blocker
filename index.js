@@ -583,6 +583,8 @@ class TwitterBlocker {
       }
 
       if (username) {
+        // remove the @ from the username
+        username = username.replace("@", "");
         this.saveUserToStorage(username, isBlocked ? 'block' : 'mute');
         
         if (isFromUrl) {
