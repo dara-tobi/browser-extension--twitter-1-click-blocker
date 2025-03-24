@@ -154,23 +154,31 @@ class OptionsManager {
       const exportMutes = document.getElementById('export-mutes').checked;
       const exportSettings = document.getElementById('export-settings').checked;
       
-      // Create a copy of settings to modify
+      // Create export data object
       let exportData = {};
       
       if (exportSettings) {
         // Export general settings (action and enabledPages)
         exportData.action = settings.action;
         exportData.enabledPages = settings.enabledPages;
+        exportData.showSettingsIcon = settings.showSettingsIcon;
       }
       
-      // Initialize stats object if any stats are being exported
+      // Only create stats object if we're exporting any stats
       if (exportBlocks || exportMutes) {
-        exportData.stats = {
-          totalBlocks: exportBlocks ? settings.stats?.totalBlocks || 0 : 0,
-          totalMutes: exportMutes ? settings.stats?.totalMutes || 0 : 0,
-          blockedUsers: exportBlocks ? settings.stats?.blockedUsers || [] : [],
-          mutedUsers: exportMutes ? settings.stats?.mutedUsers || [] : []
-        };
+        exportData.stats = {};
+        
+        // Only include block-related stats if blocks are being exported
+        if (exportBlocks) {
+          exportData.stats.totalBlocks = settings.stats?.totalBlocks || 0;
+          exportData.stats.blockedUsers = settings.stats?.blockedUsers || [];
+        }
+        
+        // Only include mute-related stats if mutes are being exported
+        if (exportMutes) {
+          exportData.stats.totalMutes = settings.stats?.totalMutes || 0;
+          exportData.stats.mutedUsers = settings.stats?.mutedUsers || [];
+        }
       }
       
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -197,7 +205,33 @@ class OptionsManager {
       try {
         const file = e.target.files[0];
         const text = await file.text();
-        const settings = JSON.parse(text);
+        const importedData = JSON.parse(text);
+        
+        // Get current settings to merge with
+        const result = await chrome.storage.sync.get('settings');
+        const currentSettings = result.settings || DEFAULT_SETTINGS;
+        
+        // Get selected import options
+        const importBlocks = document.getElementById('export-blocks').checked;
+        const importMutes = document.getElementById('export-mutes').checked;
+        const importSettings = document.getElementById('export-settings').checked;
+        
+        // Create merged settings object
+        const settings = {
+          // Import general settings only if selected
+          action: importSettings ? importedData.action : currentSettings.action,
+          enabledPages: importSettings ? importedData.enabledPages : currentSettings.enabledPages,
+          showSettingsIcon: importSettings ? importedData.showSettingsIcon : currentSettings.showSettingsIcon,
+          
+          // Initialize stats object
+          stats: {
+            // Preserve current stats if not importing respective data
+            totalBlocks: importBlocks ? (importedData.stats?.totalBlocks || 0) : currentSettings.stats?.totalBlocks || 0,
+            totalMutes: importMutes ? (importedData.stats?.totalMutes || 0) : currentSettings.stats?.totalMutes || 0,
+            blockedUsers: importBlocks ? (importedData.stats?.blockedUsers || []) : currentSettings.stats?.blockedUsers || [],
+            mutedUsers: importMutes ? (importedData.stats?.mutedUsers || []) : currentSettings.stats?.mutedUsers || []
+          }
+        };
         
         await chrome.storage.sync.set({ settings });
         this.updateUI(settings);
