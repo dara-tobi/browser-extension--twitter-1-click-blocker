@@ -249,7 +249,11 @@ class TwitterBlocker {
 
     if (mutationString.includes("X will use this to make your timeline better.")) {
       const wrapper = mutation.target.closest(CONFIG.selectors.cellInnerDiv);
-      this.hideElement(wrapper);
+      // only hide it if wrapper.queryselectorall('button').length < 3
+      // this is so that the confirmation dialog for "not interested" doesn't get hidden
+      if (wrapper.querySelectorAll('button').length < 3) {
+        this.hideElement(wrapper);
+      }
     }
   }
 
