@@ -175,7 +175,7 @@ class SettingsUI {
 
             /* Tooltip styles */
             .settings-button-wrapper::after {
-                content: 'Open settings...';
+                content: 'Settings';
                 position: absolute;
                 top: 42px;
                 right: -8px;
