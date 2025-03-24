@@ -142,6 +142,7 @@ class OptionsManager {
     // Add event listeners for backup/restore
     document.getElementById('export-data').addEventListener('click', () => this.exportData());
     document.getElementById('import-data').addEventListener('click', () => this.importData());
+    document.getElementById('clear-data').addEventListener('click', () => this.clearData());
   }
 
   async exportData() {
@@ -193,9 +194,16 @@ class OptionsManager {
         .replace('T', '_') // replace T with underscore
         .slice(0, -5); // remove milliseconds and timezone
       
+      // Build filename with exported data types
+      const exportTypes = [];
+      if (exportBlocks) exportTypes.push('blocks');
+      if (exportMutes) exportTypes.push('mutes');
+      if (exportSettings) exportTypes.push('settings');
+      const typesStr = exportTypes.join('-');
+      
       const a = document.createElement('a');
       a.href = url;
-      a.download = `one-click-blocker-settings-${dateStr}.json`;
+      a.download = `one-click-blocker-${typesStr}-${dateStr}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -251,6 +259,45 @@ class OptionsManager {
     };
     
     input.click();
+  }
+
+  async clearData() {
+    if (!confirm('Are you sure you want to clear the selected data? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const result = await chrome.storage.sync.get('settings');
+      const currentSettings = result.settings || DEFAULT_SETTINGS;
+      
+      // Get selected options
+      const clearBlocks = document.getElementById('export-blocks').checked;
+      const clearMutes = document.getElementById('export-mutes').checked;
+      const clearSettings = document.getElementById('export-settings').checked;
+      
+      // Create new settings object
+      const settings = {
+        // Clear or keep general settings
+        action: clearSettings ? DEFAULT_SETTINGS.action : currentSettings.action,
+        enabledPages: clearSettings ? DEFAULT_SETTINGS.enabledPages : currentSettings.enabledPages,
+        showSettingsIcon: clearSettings ? DEFAULT_SETTINGS.showSettingsIcon : currentSettings.showSettingsIcon,
+        
+        // Initialize stats object
+        stats: {
+          // Clear or keep respective stats
+          totalBlocks: clearBlocks ? 0 : currentSettings.stats?.totalBlocks || 0,
+          totalMutes: clearMutes ? 0 : currentSettings.stats?.totalMutes || 0,
+          blockedUsers: clearBlocks ? [] : currentSettings.stats?.blockedUsers || [],
+          mutedUsers: clearMutes ? [] : currentSettings.stats?.mutedUsers || []
+        }
+      };
+      
+      await chrome.storage.sync.set({ settings });
+      this.updateUI(settings);
+      this.showSaveNotice();
+    } catch (error) {
+      console.error('Error clearing data:', error);
+    }
   }
 }
 

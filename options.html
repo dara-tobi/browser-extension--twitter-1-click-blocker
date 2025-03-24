@@ -222,6 +222,19 @@
       flex-direction: column;
       gap: 8px;
     }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .button.danger {
+      background-color: rgb(231, 76, 60);
+    }
+
+    .button.danger:hover {
+      background-color: rgb(192, 57, 43);
+    }
   </style>
 </head>
 <body>
@@ -356,7 +369,7 @@
       <div class="section">
         <div class="section-title">Backup & Restore</div>
         <div class="option-group">
-          <div class="section-subtitle">Select what to export/import:</div>
+          <div class="section-subtitle">Select what to export/import/clear:</div>
           <div class="export-options">
             <div class="option">
               <input type="checkbox" id="export-blocks" name="export-options" value="blocks" checked>
@@ -371,8 +384,11 @@
               <label for="export-settings">Settings</label>
             </div>
           </div>
-          <button class="button" id="export-data">Export Data</button>
-          <button class="button" id="import-data">Import Data</button>
+          <div class="button-group">
+            <button class="button" id="export-data">Export Data</button>
+            <button class="button" id="import-data">Import Data</button>
+            <button class="button danger" id="clear-data">Clear Data (Reset to Default)</button>
+          </div>
         </div>
       </div>
     </div>
