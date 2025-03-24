@@ -154,8 +154,10 @@ class OptionsManager {
       const exportMutes = document.getElementById('export-mutes').checked;
       const exportSettings = document.getElementById('export-settings').checked;
       
-      // Create export data object
-      let exportData = {};
+      // Create export data object with timestamp
+      let exportData = {
+        exportDate: new Date().toISOString()
+      };
       
       if (exportSettings) {
         // Export general settings (action and enabledPages)
@@ -184,9 +186,16 @@ class OptionsManager {
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       
+      // Format date and time for filename
+      const now = new Date();
+      const dateStr = now.toISOString()
+        .replace(/[:.]/g, '-') // replace colons and dots with hyphens
+        .replace('T', '_') // replace T with underscore
+        .slice(0, -5); // remove milliseconds and timezone
+      
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'one-click-blocker-settings.json';
+      a.download = `one-click-blocker-settings-${dateStr}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
