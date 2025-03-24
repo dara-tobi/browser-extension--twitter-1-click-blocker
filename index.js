@@ -130,7 +130,6 @@ class TwitterBlocker {
       const containsUsername = dialog?.textContent?.toLowerCase()?.includes(this.usernameToAction.toLowerCase());
       if (containsUsername) {
         confirmButton.click();
-        this.usernameToAction = null;
       }
     }
 
@@ -328,6 +327,7 @@ class TwitterBlocker {
 
   addProfileBlockButtonListeners(blockButton, userActionsButton) {
     blockButton.addEventListener("click", () => {
+      this.usernameToAction = location.pathname.split("/")[1];
       userActionsButton.click();
       this.triggerMenuOptionClick();
     });
@@ -531,8 +531,12 @@ class TwitterBlocker {
     blockButton.classList.add(CONFIG.classes.blockButton);
 
     blockButton.addEventListener('click', () => {
-      userActions.click();
-      this.triggerMenuOptionClick();
+      const username = userCell.querySelector('a[href^="/"]')?.getAttribute('href')?.substring(1);
+      if (username) {
+        this.usernameToAction = username;
+        userActions.click();
+        this.triggerMenuOptionClick();
+      }
     });
   }
 
@@ -546,48 +550,28 @@ class TwitterBlocker {
     const isMuted = mutationString.includes("muted");
     
     if (isBlocked || isMuted) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const isFromUrl = urlParams.get("block") || urlParams.get("mute");
+      let username = this.usernameToAction;
       
-      let username;
-      if (isFromUrl) {
-        // If blocking from URL (e.g. auto-block), get username from URL
-        username = location.pathname.split("/")[1];
-      } else {
-        // If blocking from tweet/profile, try multiple ways to get the username
-        // First try the stored username from the action button
-        if (this.usernameToAction) {
-          username = this.usernameToAction;
-        } else {
-          // Try to get it from the User-Name element
-          const userNameElement = mutation.target.querySelector(CONFIG.selectors.userName);
-          if (userNameElement) {
-            const userLink = userNameElement.querySelector('a[href^="/"]');
-            if (userLink) {
-              username = userLink.getAttribute('href').substring(1);
-            }
-          }
-          
-          // If still no username, try getting it from the dialog text
-          if (!username) {
-            const dialog = mutation.target.querySelector(CONFIG.selectors.confirmationDialog);
-            if (dialog) {
-              const dialogText = dialog.textContent;
-              const matches = dialogText.match(/@(\w+)/);
-              if (matches && matches[1]) {
-                username = matches[1];
-              }
-            }
-          }
+      // If no username in class variable, try getting it from URL (for auto-block cases)
+      if (!username) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const isFromUrl = urlParams.get("block") || urlParams.get("mute");
+        if (isFromUrl) {
+          username = location.pathname.split("/")[1];
         }
       }
 
       if (username) {
-        // remove the @ from the username
+        // remove the @ from the username if present
         username = username.replace("@", "");
         this.saveUserToStorage(username, isBlocked ? 'block' : 'mute');
         
-        if (isFromUrl) {
+        // Clear the username after saving
+        this.usernameToAction = null;
+        
+        // Close window if this was from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get("block") || urlParams.get("mute")) {
           window.close();
         }
       }
@@ -712,6 +696,7 @@ class TwitterBlocker {
   }
 
   sendBlockRequest(username) {
+    console.log('👤 Sending block request for:', username);
     chrome.runtime.sendMessage({ type: "open_tab", username, block: true });
   }
 
@@ -760,7 +745,11 @@ class TwitterBlocker {
           e.stopImmediatePropagation();
 
           const username = followButton?.getAttribute("aria-label")?.split("@")?.[1];
-          this.sendBlockRequest(username);
+          if (username) {
+            this.usernameToAction = username;
+            console.log('👤 Username to action:', username);
+            this.sendBlockRequest(username);
+          }
         });
       }
     });
