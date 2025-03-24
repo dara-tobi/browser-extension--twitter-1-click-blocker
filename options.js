@@ -94,9 +94,8 @@ class OptionsManager {
     list.innerHTML = users.length ? users.map(user => `
       <div class="blocked-user">
         <div class="blocked-user-info">
-          <span>@${user}</span>
+          <a href="https://twitter.com/${user}" target="_blank" class="user-link">@${user}</a>
         </div>
-        <button class="button" onclick="optionsManager.unblockUser('${user}')">Unblock</button>
       </div>
     `).join('') : '<p>No blocked users yet.</p>';
   }
@@ -106,43 +105,10 @@ class OptionsManager {
     list.innerHTML = users.length ? users.map(user => `
       <div class="blocked-user">
         <div class="blocked-user-info">
-          <span>@${user}</span>
+          <a href="https://twitter.com/${user}" target="_blank" class="user-link">@${user}</a>
         </div>
-        <button class="button" onclick="optionsManager.unmuteUser('${user}')">Unmute</button>
       </div>
     `).join('') : '<p>No muted users yet.</p>';
-  }
-
-  async unblockUser(username) {
-    try {
-      const result = await chrome.storage.sync.get('settings');
-      const settings = result.settings || DEFAULT_SETTINGS;
-      
-      settings.stats.blockedUsers = settings.stats.blockedUsers.filter(user => user !== username);
-      settings.stats.totalBlocks = Math.max(0, settings.stats.totalBlocks - 1);
-      
-      await chrome.storage.sync.set({ settings });
-      this.updateBlockedUsersList(settings.stats.blockedUsers);
-      this.updateUI(settings);
-    } catch (error) {
-      console.error('Error unblocking user:', error);
-    }
-  }
-
-  async unmuteUser(username) {
-    try {
-      const result = await chrome.storage.sync.get('settings');
-      const settings = result.settings || DEFAULT_SETTINGS;
-      
-      settings.stats.mutedUsers = settings.stats.mutedUsers.filter(user => user !== username);
-      settings.stats.totalMutes = Math.max(0, settings.stats.totalMutes - 1);
-      
-      await chrome.storage.sync.set({ settings });
-      this.updateMutedUsersList(settings.stats.mutedUsers);
-      this.updateUI(settings);
-    } catch (error) {
-      console.error('Error unmuting user:', error);
-    }
   }
 
   showSaveNotice() {

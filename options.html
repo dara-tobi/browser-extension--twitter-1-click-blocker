@@ -173,6 +173,18 @@
       gap: 12px;
     }
 
+    .user-link {
+      color: var(--twitter-text);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .user-link:hover {
+      color: var(--twitter-blue);
+      text-decoration: underline;
+    }
+
     .save-notice {
       position: fixed;
       bottom: 20px;
@@ -219,7 +231,7 @@
   </div>
 
   <div class="container">
-    <div id="settings" class="tab-content">
+    <div id="settings" class="tab-content active">
       <div class="section">
         <div class="section-title">Default Action</div>
         <div class="option-group">
@@ -289,7 +301,7 @@
       </div>
     </div>
 
-    <div id="blocked" class="tab-content active">
+    <div id="blocked" class="tab-content">
       <div class="section">
         <div class="section-title">Blocked Users</div>
         <div id="blocked-users-list">
