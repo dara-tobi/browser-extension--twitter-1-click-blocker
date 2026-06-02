@@ -803,10 +803,13 @@ class TwitterBlocker {
         // Clear the username after saving
         this.usernameToAction = null;
         
-        // Close window if this was from URL
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get("block") || urlParams.get("mute")) {
-          window.close();
+          chrome.runtime.sendMessage({
+            type: 'feedback',
+            data: `${completedAction}_button_clicked`,
+            username
+          });
           return;
         }
       }
@@ -887,7 +890,6 @@ class TwitterBlocker {
       data: `${action}_button_clicked`,
       username
     });
-    window.close();
     return true;
   }
 

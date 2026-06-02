@@ -15,6 +15,30 @@ function getActiveAccountLists(settings) {
 
 let isProcessingToBlockQueue = false;
 let currentQueueTabId = null;
+let currentQueueUsername = null;
+let isAdvancingQueue = false;
+
+async function syncQueueRunningFromStorage() {
+  const { toBlockQueueRunning } = await chrome.storage.local.get('toBlockQueueRunning');
+  isProcessingToBlockQueue = !!toBlockQueueRunning;
+}
+
+async function resetQueueRunStats() {
+  await chrome.storage.local.set({
+    toBlockQueueRunStats: { blocked: 0, muted: 0, notFound: 0 }
+  });
+}
+
+async function clearQueueRunStats() {
+  await chrome.storage.local.remove('toBlockQueueRunStats');
+}
+
+async function incrementQueueRunStat(field) {
+  const { toBlockQueueRunStats } = await chrome.storage.local.get('toBlockQueueRunStats');
+  const stats = toBlockQueueRunStats || { blocked: 0, muted: 0, notFound: 0 };
+  stats[field] = (stats[field] || 0) + 1;
+  await chrome.storage.local.set({ toBlockQueueRunStats: stats });
+}
 
 async function setQueueRunning(running, queueAction) {
   isProcessingToBlockQueue = running;
@@ -22,6 +46,9 @@ async function setQueueRunning(running, queueAction) {
     toBlockQueueRunning: running,
     toBlockQueueAction: running ? (queueAction || 'block') : null
   });
+  if (!running) {
+    await clearQueueRunStats();
+  }
 }
 
 function getBulkQueueAction(accountOrSettings) {
@@ -56,6 +83,7 @@ function emitToBlockQueueEvent(type, username) {
 }
 
 async function openNextInToBlockQueue() {
+  await syncQueueRunningFromStorage();
   if (!isProcessingToBlockQueue) return;
 
   let settings = await loadMigratedSettings(null);
@@ -88,32 +116,48 @@ async function openNextInToBlockQueue() {
     active: false,
   });
   currentQueueTabId = tab.id;
+  currentQueueUsername = username;
 }
 
 async function advanceToBlockQueue(completedUsername, options = {}) {
-  if (!options.keepInQueue) {
-    await removeUsernameFromToBlockQueue(completedUsername);
-  }
-
-  if (currentQueueTabId) {
-    try {
-      await chrome.tabs.remove(currentQueueTabId);
-    } catch (e) {
-      // tab may already be closed
+  if (isAdvancingQueue) return;
+  isAdvancingQueue = true;
+  try {
+    await syncQueueRunningFromStorage();
+    if (options.notFound) {
+      await incrementQueueRunStat('notFound');
+    } else if (completedUsername && !options.keepInQueue) {
+      const settings = await loadMigratedSettings(null);
+      const queueAction = getBulkQueueAction(getActiveAccountLists(settings));
+      await incrementQueueRunStat(queueAction === 'mute' ? 'muted' : 'blocked');
     }
-    currentQueueTabId = null;
+    if (completedUsername && !options.keepInQueue) {
+      await removeUsernameFromToBlockQueue(completedUsername);
+    }
+
+    if (currentQueueTabId) {
+      try {
+        await chrome.tabs.remove(currentQueueTabId);
+      } catch (e) {
+        // tab may already be closed
+      }
+      currentQueueTabId = null;
+      currentQueueUsername = null;
+    }
+
+    if (!isProcessingToBlockQueue) return;
+
+    const settings = await loadMigratedSettings(null);
+    const account = getActiveAccountLists(settings);
+    if (!AccountData.findNextToBlockQueueUser(account)) {
+      await setQueueRunning(false, null);
+      return;
+    }
+
+    setTimeout(() => openNextInToBlockQueue(), 500);
+  } finally {
+    isAdvancingQueue = false;
   }
-
-  if (!isProcessingToBlockQueue) return;
-
-  const settings = await loadMigratedSettings(null);
-  const account = getActiveAccountLists(settings);
-  if (!AccountData.findNextToBlockQueueUser(account)) {
-    await setQueueRunning(false, null);
-    return;
-  }
-
-  setTimeout(() => openNextInToBlockQueue(), 500);
 }
 
 async function startToBlockQueue() {
@@ -123,6 +167,7 @@ async function startToBlockQueue() {
   if (!queue.length) return;
 
   const queueAction = getBulkQueueAction(account);
+  await resetQueueRunStats();
   await setQueueRunning(true, queueAction);
   if (currentQueueTabId) {
     try {
@@ -205,7 +250,8 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         username
       ) {
         await advanceToBlockQueue(username, {
-          keepInQueue: message.data === 'account_not_found'
+          keepInQueue: message.data === 'account_not_found',
+          notFound: message.data === 'account_not_found'
         });
       } else if (sender.tab?.id) {
         closeTab(sender.tab.id);
@@ -217,35 +263,38 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       let username = message.username;
       let action = message.data === "block_button_clicked" ? "block" : "mute";
 
-      if (isProcessingToBlockQueue) {
-        const settings = await loadMigratedSettings(null);
-        const account = getActiveAccountLists(settings);
-        const queue = account.toBlockUsers || [];
+      await syncQueueRunningFromStorage();
+      if (isProcessingToBlockQueue && sender.tab?.id === currentQueueTabId) {
+        const account = getActiveAccountLists(await loadMigratedSettings(null));
         const queueAction = getBulkQueueAction(account);
         const completed =
           (queueAction === 'block' && message.data === 'block_button_clicked') ||
           (queueAction === 'mute' && message.data === 'mute_button_clicked');
-        if (completed && isUsernameInToBlockQueue(username, queue)) {
+        if (completed && username) {
           await advanceToBlockQueue(username);
         }
+        return;
       }
 
-      await chrome.tabs.remove(sender.tab.id);
-      // get active tab
+      if (sender.tab?.id) {
+        try {
+          await chrome.tabs.remove(sender.tab.id);
+        } catch (e) {
+          // tab may already be closed
+        }
+      }
       chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        // send finished_action message to the active tab
+        if (!tabs[0]?.id) return;
         chrome.tabs.sendMessage(
           tabs[0].id,
-          { 
-            type: "finished_" + action + "ing", 
+          {
+            type: "finished_" + action + "ing",
             username: username,
-            action: action 
-          },
-          function (response) {
-            // console.log('action completed');
+            action: action
           }
         );
       });
+      return;
     }
   }
 
@@ -270,3 +319,15 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 function closeTab(tabId) {
   chrome.tabs.remove(tabId);
 }
+
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  if (tabId !== currentQueueTabId || isAdvancingQueue) return;
+  const username = currentQueueUsername;
+  await syncQueueRunningFromStorage();
+  if (!isProcessingToBlockQueue) {
+    currentQueueTabId = null;
+    currentQueueUsername = null;
+    return;
+  }
+  await advanceToBlockQueue(username);
+});

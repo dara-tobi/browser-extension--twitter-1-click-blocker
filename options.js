@@ -83,15 +83,19 @@ class OptionsManager {
       not_found: `${user} no longer exists.`
     };
     const message = messages[event.type] || `${user} removed from queue.`;
-    const status = document.getElementById('to-block-queue-status');
-    if (status) {
-      status.textContent = message;
-      clearTimeout(this._toBlockFeedbackTimer);
-      this._toBlockFeedbackTimer = setTimeout(() => {
-        if (status.textContent === message) status.textContent = '';
-      }, 8000);
-    }
-    this.showSaveNotice(message);
+    chrome.storage.local.get(['toBlockQueueRunning'], (result) => {
+      if (!result.toBlockQueueRunning) {
+        const status = document.getElementById('to-block-queue-status');
+        if (status) {
+          status.textContent = message;
+          clearTimeout(this._toBlockFeedbackTimer);
+          this._toBlockFeedbackTimer = setTimeout(() => {
+            if (status.textContent === message) status.textContent = '';
+          }, 8000);
+        }
+      }
+      this.showSaveNotice(message);
+    });
   }
 
   async refreshToBlockListOnly() {
@@ -246,10 +250,6 @@ class OptionsManager {
     const action = settings.bulkQueueAction || 'block';
     const radio = document.querySelector(`input[name="bulk-queue-action"][value="${action}"]`);
     if (radio) radio.checked = true;
-    const startBtn = document.getElementById('start-to-block-queue');
-    if (startBtn) {
-      startBtn.textContent = action === 'mute' ? 'Start Muting' : 'Start Blocking';
-    }
   }
 
   updateToBlockFilterUI(settings) {
@@ -358,16 +358,47 @@ class OptionsManager {
     this.showToBlockFeedback({ type: eventType, username: normalized });
   }
 
+  formatQueueRunStats(queueAction, stats) {
+    const s = stats || { blocked: 0, muted: 0, notFound: 0 };
+    const parts = [];
+    if (queueAction === 'mute') {
+      parts.push(`${s.muted || 0} muted`);
+    } else {
+      parts.push(`${s.blocked || 0} blocked`);
+    }
+    parts.push(`${s.notFound || 0} not found`);
+    return parts.join(', ');
+  }
+
   updateToBlockQueueStatus() {
     const status = document.getElementById('to-block-queue-status');
+    const startBtn = document.getElementById('start-to-block-queue');
+    const stopBtn = document.getElementById('stop-to-block-queue');
     if (!status) return;
-    chrome.storage.local.get(['toBlockQueueRunning', 'toBlockQueueAction'], (result) => {
-      if (!result.toBlockQueueRunning) {
-        return;
+    chrome.storage.local.get(
+      ['toBlockQueueRunning', 'toBlockQueueAction', 'toBlockQueueRunStats'],
+      (result) => {
+      const running = !!result.toBlockQueueRunning;
+      const queueAction = result.toBlockQueueAction === 'mute' ? 'mute' : 'block';
+      const startLabel = queueAction === 'mute' ? 'Start Muting' : 'Start Blocking';
+
+      if (startBtn) {
+        startBtn.textContent = running ? 'Stop' : startLabel;
+        startBtn.classList.toggle('danger', running);
       }
-      const label = result.toBlockQueueAction === 'mute' ? 'Muting' : 'Blocking';
-      status.textContent = `${label} queue is running…`;
-    });
+      if (stopBtn) {
+        stopBtn.style.display = 'none';
+      }
+
+      if (running) {
+        const label = queueAction === 'mute' ? 'Muting' : 'Blocking';
+        const runStats = this.formatQueueRunStats(queueAction, result.toBlockQueueRunStats);
+        status.textContent = `${label} queue is running… This run: ${runStats}.`;
+      } else if (status.textContent.includes('queue is running')) {
+        status.textContent = '';
+      }
+    }
+    );
   }
 
   async saveBulkQueueAction() {
@@ -451,7 +482,15 @@ class OptionsManager {
     document.getElementById('clear-data').addEventListener('click', () => this.clearData());
 
     document.getElementById('import-to-block').addEventListener('click', () => this.importToBlockUsers());
-    document.getElementById('start-to-block-queue').addEventListener('click', () => this.startToBlockQueue());
+    document.getElementById('start-to-block-queue').addEventListener('click', () => {
+      chrome.storage.local.get(['toBlockQueueRunning'], (result) => {
+        if (result.toBlockQueueRunning) {
+          this.stopToBlockQueue();
+        } else {
+          this.startToBlockQueue();
+        }
+      });
+    });
     document.getElementById('stop-to-block-queue').addEventListener('click', () => this.stopToBlockQueue());
     document.getElementById('clear-to-block-queue').addEventListener('click', () => this.clearToBlockQueue());
     document.getElementById('show-to-block-not-found')?.addEventListener('change', () => {
@@ -469,6 +508,7 @@ class OptionsManager {
           username: message.username
         });
         void this.refreshToBlockListOnly();
+        this.updateToBlockQueueStatus();
       }
     });
 
@@ -477,6 +517,9 @@ class OptionsManager {
         this.loadSettings();
       }
       if (namespace === 'local' && changes.toBlockQueueRunning) {
+        this.updateToBlockQueueStatus();
+      }
+      if (namespace === 'local' && changes.toBlockQueueRunStats) {
         this.updateToBlockQueueStatus();
       }
     });
@@ -664,11 +707,23 @@ class OptionsManager {
 
   async startToBlockQueue() {
     await this.saveBulkQueueAction();
+    const queueAction =
+      document.querySelector('input[name="bulk-queue-action"]:checked')?.value || 'block';
+    await chrome.storage.local.set({
+      toBlockQueueRunning: true,
+      toBlockQueueAction: queueAction,
+      toBlockQueueRunStats: { blocked: 0, muted: 0, notFound: 0 }
+    });
     chrome.runtime.sendMessage({ type: 'start_to_block_queue' });
     this.updateToBlockQueueStatus();
   }
 
-  stopToBlockQueue() {
+  async stopToBlockQueue() {
+    await chrome.storage.local.set({
+      toBlockQueueRunning: false,
+      toBlockQueueAction: null
+    });
+    await chrome.storage.local.remove('toBlockQueueRunStats');
     chrome.runtime.sendMessage({ type: 'stop_to_block_queue' });
     this.updateToBlockQueueStatus();
   }
