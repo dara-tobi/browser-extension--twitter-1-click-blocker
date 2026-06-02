@@ -24,6 +24,59 @@ const DEFAULT_SETTINGS = {
     }
 };
 
+const THEME_ICON_COLORS = {
+    "#000000": "rgb(113, 118, 123)",
+    "#15202B": "rgb(139, 152, 165)",
+    "#FFFFFF": "rgb(83, 100, 113)",
+};
+
+function parseRgbColor(color) {
+    if (!color) return null;
+    if (color.startsWith("#")) {
+        const hex = color.length === 4
+            ? color.slice(1).split("").map((c) => c + c).join("")
+            : color.slice(1);
+        return {
+            r: parseInt(hex.slice(0, 2), 16),
+            g: parseInt(hex.slice(2, 4), 16),
+            b: parseInt(hex.slice(4, 6), 16),
+        };
+    }
+    const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        return { r: +match[1], g: +match[2], b: +match[3] };
+    }
+    return null;
+}
+
+function isDarkColor(color) {
+    const rgb = parseRgbColor(color);
+    if (!rgb) return false;
+    return (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255 < 0.5;
+}
+
+function getElementBackground(element) {
+    let el = element?.parentElement;
+    while (el) {
+        const bg = getComputedStyle(el).backgroundColor;
+        if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") {
+            return bg;
+        }
+        el = el.parentElement;
+    }
+    return getComputedStyle(document.body).backgroundColor || "#000000";
+}
+
+function getThemeColors(contextElement) {
+    const bgColor = contextElement
+        ? getElementBackground(contextElement)
+        : getElementBackground(document.body);
+    const iconColor = isDarkColor(bgColor)
+        ? THEME_ICON_COLORS["#000000"]
+        : THEME_ICON_COLORS["#FFFFFF"];
+    return { bgColor, iconColor };
+}
+
 class SettingsManager {
     constructor() {
         this.settings = DEFAULT_SETTINGS;
@@ -83,13 +136,7 @@ class SettingsUI {
         const button = document.createElement('div');
         button.className = 'one-click-blocker-settings-button';
         
-        // Get background color from theme
-        const bgColor = document.querySelector("meta[name=theme-color]")?.content || "#FFFFFF";
-        const color = {
-            "#000000": "rgb(113, 118, 123)",
-            "#15202B": "rgb(139, 152, 165)",
-            "#FFFFFF": "rgb(83, 100, 113)"
-        }[bgColor] || "rgb(83, 100, 113)";
+        const { bgColor, iconColor: color } = getThemeColors(document.body);
 
         // Create wrapper and background elements
         const wrapper = document.createElement('div');
@@ -296,5 +343,6 @@ class SettingsUI {
 // Export for use in index.js
 window.OneClickBlockerSettings = {
     SettingsManager,
-    SettingsUI
+    SettingsUI,
+    getThemeColors
 }; 

@@ -49,8 +49,9 @@ class TwitterBlocker {
     this.ownUsername = null;
     this.somethingWentWrong = false;
     this.usernameToAction = null;
-    this.blockerBgColor = document.querySelector("meta[name=theme-color]")?.content;
-    this.blockerColor = CONFIG.colors[this.blockerBgColor];
+    const { bgColor, iconColor } = getThemeColors();
+    this.blockerBgColor = bgColor;
+    this.blockerColor = iconColor;
 
     // Initialize settings
     this.settingsManager = new window.OneClickBlockerSettings.SettingsManager();
@@ -58,7 +59,44 @@ class TwitterBlocker {
     this.settingsUI.mount();
 
     this.initMutationObserver();
+    this.initNavigationListener();
     this.initMessageListener();
+  }
+
+  initNavigationListener() {
+    this.lastPath = location.pathname;
+
+    const onNavigate = () => {
+      if (location.pathname === this.lastPath) return;
+      this.lastPath = location.pathname;
+      this.ownUsername = null;
+      this.setUsername();
+      this.cleanupOwnProfileBlockButtons();
+    };
+
+    window.addEventListener("popstate", onNavigate);
+    const wrapHistory = (method) => {
+      const original = history[method].bind(history);
+      history[method] = (...args) => {
+        const result = original(...args);
+        onNavigate();
+        return result;
+      };
+    };
+    wrapHistory("pushState");
+    wrapHistory("replaceState");
+  }
+
+  cleanupOwnProfileBlockButtons() {
+    if (!this.getProfilePageInfo().isOwnProfilePage) return;
+    this.removeProfileHeaderBlockButtons();
+    [100, 500, 1500].forEach((ms) => {
+      setTimeout(() => {
+        if (this.getProfilePageInfo().isOwnProfilePage) {
+          this.removeProfileHeaderBlockButtons();
+        }
+      }, ms);
+    });
   }
 
   initMutationObserver() {
@@ -79,6 +117,9 @@ class TwitterBlocker {
 
   handleDOMMutation(mutation) {
     this.setUsername();
+    if (this.getProfilePageInfo().isOwnProfilePage) {
+      this.removeProfileHeaderBlockButtons();
+    }
     this.handleConfirmUserBlock(mutation);
     this.handleOptionsMenu(mutation);
     this.addBlockButtonsToTimelines(mutation);
@@ -89,6 +130,9 @@ class TwitterBlocker {
     this.handleGrokButtonOverlap(mutation);
     this.addBlockButtonsToEngagementsPages(mutation);
     // this.addBlockAllButtonToEngagementsPages(mutation);
+    if (this.getProfilePageInfo().isOwnProfilePage) {
+      this.removeProfileHeaderBlockButtons();
+    }
   }
 
   initMessageListener() {
@@ -265,7 +309,12 @@ class TwitterBlocker {
 
   async handleProfilePageBlockButton(mutation) {
     const pageInfo = this.getProfilePageInfo();
-    if (!pageInfo.isProfilePage || pageInfo.isOwnProfilePage) {
+    if (!pageInfo.isProfilePage) {
+      return;
+    }
+
+    if (pageInfo.isOwnProfilePage) {
+      this.removeProfileHeaderBlockButtons();
       return;
     }
 
@@ -281,20 +330,32 @@ class TwitterBlocker {
     this.addProfileBlockButton(userActionsButton);
   }
 
+  getOwnHandle() {
+    const text = document
+      .querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')
+      ?.querySelector("[tabindex]")?.textContent;
+    if (!text) return null;
+    const match = text.match(/@([A-Za-z0-9_]+)/);
+    return match?.[1]?.toLowerCase() || null;
+  }
+
   getProfilePageInfo() {
-    const currentUsername = location.pathname.split("/")[1];
     let isProfilePage = () => {
       return !!document.querySelector(CONFIG.selectors.userActions);
     };
-    
+
     let isOwnProfilePage = () => {
-      return (
-        document
-          .querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')
-          ?.querySelector("[tabindex]")
-          ?.textContent?.split("@")?.[1] ==
-        location.pathname.split("/")[location.pathname.split("/").length - 1]
-      );
+      if (document.querySelector('[data-testid="editProfileButton"]')) {
+        return true;
+      }
+
+      const ownUsername = this.getOwnHandle();
+      const profileUsername = location.pathname.split("/")[1]?.toLowerCase();
+      const reservedPaths = ["home", "search", "explore", "notifications", "messages", "i", "settings", "compose"];
+      if (!ownUsername || !profileUsername || reservedPaths.includes(profileUsername)) {
+        return false;
+      }
+      return ownUsername === profileUsername;
     };
 
     return { isProfilePage: isProfilePage(), isOwnProfilePage: isOwnProfilePage() };
@@ -304,15 +365,74 @@ class TwitterBlocker {
     return mutation.target.querySelector(CONFIG.selectors.userActions);
   }
 
+  removeProfileHeaderBlockButtons() {
+    const profileActions = document.querySelector(CONFIG.selectors.userActions);
+    const editProfileButton = document.querySelector('[data-testid="editProfileButton"]');
+    const anchors = [profileActions, editProfileButton].filter(Boolean);
+    if (!anchors.length) return;
+
+    const containers = new Set();
+    anchors.forEach((anchor) => {
+      const tracking = anchor.closest(CONFIG.selectors.placementTracking);
+      if (tracking) containers.add(tracking);
+      if (anchor.parentElement) containers.add(anchor.parentElement);
+      let el = anchor.parentElement?.parentElement;
+      while (el) {
+        if (el.matches?.(CONFIG.selectors.primaryColumn) || el.matches?.("main")) {
+          break;
+        }
+        containers.add(el);
+        el = el.parentElement;
+      }
+    });
+
+    containers.forEach((container) => {
+      container.querySelectorAll(`.${CONFIG.classes.blockButton}`).forEach((btn) => {
+        if (!btn.closest(`.${CONFIG.classes.blockButtonWrapper}`)) {
+          btn.remove();
+        }
+      });
+    });
+
+    if (editProfileButton) {
+      const editRect = editProfileButton.getBoundingClientRect();
+      document.querySelectorAll(`.${CONFIG.classes.blockButton}`).forEach((btn) => {
+        if (btn.closest(`.${CONFIG.classes.blockButtonWrapper}`)) return;
+        const btnRect = btn.getBoundingClientRect();
+        const sameRow = Math.abs(btnRect.top - editRect.top) < 50;
+        const besideEditProfile =
+          btnRect.left >= editRect.left - 120 && btnRect.right <= editRect.right + 20;
+        if (sameRow && besideEditProfile) {
+          btn.remove();
+        }
+      });
+    }
+  }
+
   hasExistingBlockButton(mutation, userActionsButton) {
-    return (
+    if (
       mutation.target.querySelector(`.${CONFIG.classes.blockButton}`) ||
       userActionsButton.parentElement.querySelector(`.${CONFIG.classes.blockButton}`)
-    );
+    ) {
+      return true;
+    }
+
+    let el = userActionsButton.parentElement;
+    while (el) {
+      if (el.matches?.(CONFIG.selectors.primaryColumn) || el.matches?.("main")) {
+        return false;
+      }
+      if (el.querySelector(`.${CONFIG.classes.blockButton}`)) {
+        return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
   }
 
   addProfileBlockButton(userActionsButton) {
-    const blockButton = new ProfileBlockButtonUI(this.blockerBgColor, this.blockerColor, this.settingsManager)
+    const { bgColor, iconColor } = getThemeColors(userActionsButton);
+    const blockButton = new ProfileBlockButtonUI(bgColor, iconColor, this.settingsManager)
       .create();
     userActionsButton.parentElement.appendChild(blockButton);
     blockButton.classList.add(CONFIG.classes.blockButton);
@@ -467,7 +587,8 @@ class TwitterBlocker {
     }
 
     const action = await this.getCurrentAction();
-    const blockButton = new BlockButtonUI(this.blockerBgColor, this.blockerColor)
+    const { bgColor, iconColor } = getThemeColors(menuOptionsButton);
+    const blockButton = new BlockButtonUI(bgColor, iconColor)
       .create(tweetUsername, menuOptionsButton, action);
     
     this.addTweetActionButtonListeners(blockButton, menuOptionsButton);
@@ -507,26 +628,27 @@ class TwitterBlocker {
   }
 
   async handleEngagementPages(mutation) {
-    if (!await this.shouldShowButtonOnPage('engagements')) return;
+    const pageType = this.getPageType();
+    if (!await this.shouldShowButtonOnPage(pageType)) return;
 
-    const userCell = mutation.target.querySelector(CONFIG.selectors.userCell);
-    if (!userCell) return;
+    this.getElementsFromMutation(mutation, CONFIG.selectors.userCell).forEach((userCell) => {
+      const userActions = userCell.querySelector(CONFIG.selectors.userActions);
+      if (!userActions || userActions.parentElement.querySelector(`.${CONFIG.classes.blockButton}`)) return;
 
-    const userActions = userCell.querySelector(CONFIG.selectors.userActions);
-    if (!userActions || userActions.parentElement.querySelector(`.${CONFIG.classes.blockButton}`)) return;
+      const { bgColor, iconColor } = getThemeColors(userActions);
+      const blockButton = new ProfileBlockButtonUI(bgColor, iconColor, this.settingsManager)
+        .create('engagements-page');
+      userActions.parentElement.appendChild(blockButton);
+      blockButton.classList.add(CONFIG.classes.blockButton);
 
-    const blockButton = new ProfileBlockButtonUI(this.blockerBgColor, this.blockerColor, this.settingsManager)
-      .create('engagements-page');
-    userActions.parentElement.appendChild(blockButton);
-    blockButton.classList.add(CONFIG.classes.blockButton);
-
-    blockButton.addEventListener('click', () => {
-      const username = userCell.querySelector('a[href^="/"]')?.getAttribute('href')?.substring(1);
-      if (username) {
-        this.usernameToAction = username;
-        userActions.click();
-        this.triggerMenuOptionClick();
-      }
+      blockButton.addEventListener('click', () => {
+        const username = userCell.querySelector('a[href^="/"]')?.getAttribute('href')?.substring(1);
+        if (username) {
+          this.usernameToAction = username;
+          userActions.click();
+          this.triggerMenuOptionClick();
+        }
+      });
     });
   }
 
@@ -689,57 +811,92 @@ class TwitterBlocker {
     chrome.runtime.sendMessage({ type: "open_tab", username, block: true });
   }
 
-  async addBlockButtonsToEngagementsPages(mutation) {    
-    let isAUserProfilePage = document.querySelector(
-      '[data-testid="userActions"]'
-    );
-
-    // Check if we should show the button based on the current page type
-    const pageType = this.getPageType();
-    if (!await this.shouldShowButtonOnPage(pageType)) {
-      return;
-    }
-
-    // if there's no tweets on the page, return. Else, the extension crashes
-    if (
-      !mutation.target.querySelector('[data-testid="cellInnerDiv"]') ||
-      !mutation.target.querySelector('[data-testid="cellInnerDiv"]')
-        .textContent ||
-      isAUserProfilePage
-    ) {
-      return;
-    }
-
-    const followButtons = mutation.target.querySelectorAll(CONFIG.selectors.followButton);
-
-    followButtons.forEach((followButton) => {
-      if (followButton.closest(CONFIG.selectors.hoverCard)) return;
-
-      if (
-        followButton &&
-        !followButton.parentElement.querySelector(".sw-block-button")
-      ) {
-        const followButtonParentTweet = followButton.closest(CONFIG.selectors.tweet);
-        if (followButtonParentTweet) return;
-
-        const blockButton = new ProfileBlockButtonUI(this.blockerBgColor, this.blockerColor, this.settingsManager)
-          .create("engagements-page");
-        followButton.parentElement.appendChild(blockButton);
-        followButton.parentElement.style.flexDirection = "row";
-        blockButton.classList.add("sw-block-button");
-        
-        blockButton.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-
-          const username = followButton?.getAttribute("aria-label")?.split("@")?.[1];
-          if (username) {
-            this.usernameToAction = username;
-            this.sendBlockRequest(username);
-          }
-        });
+  getElementsFromMutation(mutation, selector) {
+    const elements = new Set();
+    const collect = (root) => {
+      if (!root || root.nodeType !== 1) return;
+      if (root.matches?.(selector)) {
+        elements.add(root);
       }
+      root.querySelectorAll?.(selector)?.forEach((el) => elements.add(el));
+    };
+    collect(mutation.target);
+    mutation.addedNodes.forEach(collect);
+    return elements;
+  }
+
+  isProfileHeaderFollowButton(followButton) {
+    const pageInfo = this.getProfilePageInfo();
+    if (!pageInfo.isProfilePage) return false;
+    if (followButton.closest(CONFIG.selectors.userCell)) return false;
+
+    const profileActions = document.querySelector(CONFIG.selectors.userActions);
+    if (!profileActions) return false;
+
+    const editProfileButton = document.querySelector('[data-testid="editProfileButton"]');
+    if (pageInfo.isOwnProfilePage && editProfileButton) {
+      const editRect = editProfileButton.getBoundingClientRect();
+      const followRect = followButton.getBoundingClientRect();
+      const sameRow = Math.abs(followRect.top - editRect.top) < 50;
+      const besideEditProfile =
+        followRect.left >= editRect.left - 120 && followRect.right <= editRect.right + 20;
+      if (sameRow && besideEditProfile) return true;
+    }
+
+    const actionBar = profileActions.closest(CONFIG.selectors.placementTracking);
+    if (actionBar?.contains(followButton)) return true;
+
+    let el = profileActions.parentElement;
+    while (el) {
+      if (el.matches?.(CONFIG.selectors.primaryColumn) || el.matches?.("main")) {
+        return false;
+      }
+      if (el.contains(followButton)) {
+        return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
+  }
+
+  attachBlockButtonToFollowButton(followButton) {
+    if (followButton.closest(CONFIG.selectors.hoverCard)) return;
+    if (this.isProfileHeaderFollowButton(followButton)) return;
+    if (followButton.parentElement.querySelector(`.${CONFIG.classes.blockButton}`)) return;
+
+    const userCell = followButton.closest(CONFIG.selectors.userCell);
+    const inTweet = followButton.closest(CONFIG.selectors.tweet);
+    if (inTweet && inTweet.querySelector(CONFIG.selectors.menuCaret)) return;
+    if (userCell?.querySelector(CONFIG.selectors.userActions)) return;
+
+    const { bgColor, iconColor } = getThemeColors(followButton);
+    const blockButton = new ProfileBlockButtonUI(bgColor, iconColor, this.settingsManager)
+      .create("engagements-page");
+    followButton.parentElement.appendChild(blockButton);
+    followButton.parentElement.style.flexDirection = "row";
+    blockButton.classList.add(CONFIG.classes.blockButton);
+
+    blockButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      const username =
+        followButton?.getAttribute("aria-label")?.split("@")?.[1] ||
+        userCell?.querySelector('a[href^="/"]')?.getAttribute("href")?.substring(1);
+      if (username) {
+        this.usernameToAction = username;
+        this.sendBlockRequest(username);
+      }
+    });
+  }
+
+  async addBlockButtonsToEngagementsPages(mutation) {
+    const pageType = this.getPageType();
+    if (!await this.shouldShowButtonOnPage(pageType)) return;
+
+    this.getElementsFromMutation(mutation, CONFIG.selectors.followButton).forEach((followButton) => {
+      this.attachBlockButtonToFollowButton(followButton);
     });
   }
 
