@@ -16,12 +16,10 @@ const DEFAULT_SETTINGS = {
         explore: true
     },
     showSettingsIcon: true,
-    stats: {
-        totalBlocks: 0,
-        totalMutes: 0,
-        blockedUsers: [],
-        mutedUsers: []
-    }
+    accounts: {},
+    activeAccount: '_unassigned',
+    detectedAccount: null,
+    _migratedToAccounts: false
 };
 
 const THEME_ICON_COLORS = {
@@ -80,24 +78,97 @@ function getThemeColors(contextElement) {
 class SettingsManager {
     constructor() {
         this.settings = DEFAULT_SETTINGS;
+        this.resolvedSettings = null;
         this.loadSettings();
     }
 
-    async loadSettings() {
+    async loadSettings(detectedHandle) {
         try {
-            const result = await chrome.storage.sync.get('settings');
-            this.settings = result.settings || DEFAULT_SETTINGS;
-            return this.settings;
+            let settings = await AccountData.loadFromChromeStorage(DEFAULT_SETTINGS);
+            settings = AccountData.migrateSettings(settings, detectedHandle);
+            await AccountData.saveToChromeStorage(settings);
+            this.settings = settings;
+            this.resolvedSettings = AccountData.resolveForActiveAccount(settings);
+            return this.resolvedSettings;
         } catch (error) {
             console.error('Error loading settings:', error);
-            return DEFAULT_SETTINGS;
+            this.resolvedSettings = AccountData.resolveForActiveAccount(DEFAULT_SETTINGS);
+            return this.resolvedSettings;
         }
     }
 
-    async saveSettings(newSettings) {
+    async syncAccountFromPage(detectedHandle) {
+        const handle = AccountData.normalizeHandle(detectedHandle);
+        if (!handle) {
+            return this.loadSettings();
+        }
         try {
-            await chrome.storage.sync.set({ settings: newSettings });
-            this.settings = newSettings;
+            let settings = await AccountData.loadFromChromeStorage(DEFAULT_SETTINGS);
+            settings = AccountData.migrateSettings(settings, handle);
+            settings.detectedAccount = handle;
+            if (!settings.accounts[handle]) {
+                settings.accounts[handle] = AccountData.defaultAccountData();
+            }
+            settings = AccountData.attachUnassignedToHandle(settings, handle);
+            settings.activeAccount = handle;
+            await chrome.storage.local.set({ loggedInHandle: handle });
+            await AccountData.saveToChromeStorage(settings);
+            this.settings = settings;
+            this.resolvedSettings = AccountData.resolveForActiveAccount(settings);
+            return this.resolvedSettings;
+        } catch (error) {
+            console.error('Error syncing account:', error);
+            return this.loadSettings();
+        }
+    }
+
+    getSettings() {
+        return this.resolvedSettings || AccountData.resolveForActiveAccount(this.settings);
+    }
+
+    async saveSettings(newSettings, detectedHandle) {
+        try {
+            let settings = await AccountData.loadFromChromeStorage(DEFAULT_SETTINGS);
+            settings = AccountData.migrateSettings(
+                settings,
+                detectedHandle || settings.detectedAccount
+            );
+            const accountKey = settings.activeAccount;
+            const account = AccountData.getAccount(settings, accountKey);
+
+            if (
+                newSettings.stats !== undefined ||
+                newSettings.toBlockUsers !== undefined ||
+                newSettings.toBlockNotFoundUsers !== undefined ||
+                newSettings.bulkQueueAction !== undefined
+            ) {
+                settings = AccountData.updateActiveAccountLists(settings, {
+                    stats: newSettings.stats !== undefined ? newSettings.stats : account.stats,
+                    toBlockUsers: newSettings.toBlockUsers !== undefined
+                        ? newSettings.toBlockUsers
+                        : account.toBlockUsers,
+                    toBlockNotFoundUsers: newSettings.toBlockNotFoundUsers !== undefined
+                        ? newSettings.toBlockNotFoundUsers
+                        : account.toBlockNotFoundUsers,
+                    bulkQueueAction: newSettings.bulkQueueAction !== undefined
+                        ? newSettings.bulkQueueAction
+                        : account.bulkQueueAction
+                });
+            }
+
+            if (newSettings.action !== undefined) {
+                settings.action = newSettings.action;
+            }
+            if (newSettings.enabledPages !== undefined) {
+                settings.enabledPages = newSettings.enabledPages;
+            }
+            if (newSettings.showSettingsIcon !== undefined) {
+                settings.showSettingsIcon = newSettings.showSettingsIcon;
+            }
+
+            await AccountData.saveToChromeStorage(settings);
+            this.settings = settings;
+            this.resolvedSettings = AccountData.resolveForActiveAccount(settings);
         } catch (error) {
             console.error('Error saving settings:', error);
         }
@@ -307,16 +378,18 @@ class SettingsUI {
         panel.style.display = this.isOpen ? 'block' : 'none';
     }
 
-    saveSettings() {
+    async saveSettings() {
+        const current = this.settingsManager.getSettings();
         const newSettings = {
             action: document.querySelector('input[name="action"]:checked').value,
             enabledPages: Object.fromEntries(
                 Array.from(document.querySelectorAll('input[name="pages"]'))
                     .map(checkbox => [checkbox.value, checkbox.checked])
-            )
+            ),
+            showSettingsIcon: current.showSettingsIcon
         };
 
-        this.settingsManager.saveSettings(newSettings);
+        await this.settingsManager.saveSettings(newSettings);
     }
 
     async mount() {

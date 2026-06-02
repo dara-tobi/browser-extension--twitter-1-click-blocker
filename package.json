@@ -3,6 +3,6 @@
   "version": "1.1.1",
   "description": "Block users on Twitter in one click instead of 3",
   "scripts": {
-    "zip": "node -e 'const manifest = require(\"./manifest.json\"); const { execSync } = require(\"child_process\"); const version = manifest.version; execSync(`zip -r one-click-blocker-${version}.zip manifest.json options.html options.js index.js settings.js service-worker.js images/`, { stdio: \"inherit\" });'"
+    "zip": "node -e 'const manifest = require(\"./manifest.json\"); const { execSync } = require(\"child_process\"); const version = manifest.version; execSync(`zip -r one-click-blocker-${version}.zip manifest.json options.html options.js account-data.js index.js settings.js service-worker.js images/`, { stdio: \"inherit\" });'"
   }
 } 

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
   <title>One-Click Blocker Settings</title>
   <style>
     :root {
@@ -158,7 +159,8 @@
       color: rgb(83, 100, 113);
     }
 
-    #blocked-users-list {
+    #blocked-users-list,
+    #to-block-users-list {
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -217,6 +219,13 @@
       display: block;
     }
 
+    .to-block-not-found-tag {
+      font-size: 12px;
+      color: rgb(83, 100, 113);
+      margin-left: 8px;
+      font-weight: normal;
+    }
+
     .export-options {
       display: flex;
       flex-direction: column;
@@ -235,15 +244,77 @@
     .button.danger:hover {
       background-color: rgb(192, 57, 43);
     }
+
+    .import-section {
+      margin-bottom: 24px;
+    }
+
+    .import-hint {
+      color: rgb(83, 100, 113);
+      font-size: 14px;
+      line-height: 1.4;
+      margin: 0 0 12px 0;
+    }
+
+    .to-block-user {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .to-block-user .user-link {
+      flex: 1;
+    }
+
+    .to-block-user-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .to-block-user-actions .button {
+      padding: 8px 16px;
+      margin: 8px 0;
+      font-size: 13px;
+    }
+
+    .button-group {
+      flex-wrap: wrap;
+    }
+
+    .account-handle-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 8px;
+    }
+
+    .account-handle-prefix {
+      font-weight: bold;
+    }
+
+    .account-handle-input {
+      flex: 1;
+      min-width: 140px;
+      padding: 10px 14px;
+      border: 1px solid var(--twitter-border);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
   </style>
 </head>
 <body>
+  <div id="settings-app">
   <div class="header">
     <h1>One-Click Blocker Settings</h1>
   </div>
 
   <div class="nav">
     <div class="nav-item active" data-tab="settings">Settings</div>
+    <div class="nav-item" data-tab="to-block">To Block</div>
     <div class="nav-item" data-tab="blocked">Blocked Users</div>
     <div class="nav-item" data-tab="muted">Muted Users</div>
     <div class="nav-item" data-tab="stats">Statistics</div>
@@ -252,6 +323,15 @@
 
   <div class="container">
     <div id="settings" class="tab-content active">
+      <div class="section account-association">
+        <div class="section-title">Your X account</div>
+        <p class="import-hint">Block and mute lists are saved for this handle.</p>
+        <div class="account-handle-row">
+          <span class="account-handle-prefix">Lists for @</span>
+          <input type="text" id="active-account-input" class="account-handle-input" autocomplete="off" spellcheck="false">
+          <button type="button" class="button" id="save-account-handle">Save</button>
+        </div>
+      </div>
       <div class="section">
         <div class="section-title">Default Action</div>
         <div class="option-group">
@@ -331,6 +411,40 @@
       </div>
     </div>
 
+    <div id="to-block" class="tab-content">
+      <div class="section">
+        <div class="section-title">To Block</div>
+        <p class="import-hint">Queue of accounts to block or mute via the extension. Import from JSON backup export (reads blocked users even if settings are included) or CSV.</p>
+        <div class="section-subtitle">Bulk action</div>
+        <div class="option-group">
+          <div class="option">
+            <input type="radio" id="bulk-queue-block" name="bulk-queue-action" value="block" checked>
+            <label for="bulk-queue-block">Block</label>
+          </div>
+          <div class="option">
+            <input type="radio" id="bulk-queue-mute" name="bulk-queue-action" value="mute">
+            <label for="bulk-queue-mute">Mute</label>
+          </div>
+        </div>
+        <div class="import-section">
+          <div class="button-group">
+            <button class="button" id="import-to-block">Import List</button>
+            <button class="button" id="start-to-block-queue">Start Blocking</button>
+            <button class="button danger" id="stop-to-block-queue">Stop</button>
+            <button class="button danger" id="clear-to-block-queue">Clear Queue</button>
+          </div>
+        </div>
+        <p class="import-hint" id="to-block-queue-status"></p>
+        <div class="option">
+          <input type="checkbox" id="show-to-block-not-found" checked>
+          <label for="show-to-block-not-found">Show suspended and deleted accounts</label>
+        </div>
+        <div id="to-block-users-list">
+          <!-- Will be populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+
     <div id="blocked" class="tab-content">
       <div class="section">
         <div class="section-title">Blocked Users</div>
@@ -393,9 +507,11 @@
       </div>
     </div>
   </div>
+  </div>
 
   <div class="save-notice">Settings saved!</div>
 
+  <script src="account-data.js"></script>
   <script src="options.js"></script>
 </body>
 </html> 
