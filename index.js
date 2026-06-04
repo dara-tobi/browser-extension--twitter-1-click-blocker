@@ -62,9 +62,6 @@ class TwitterBlocker {
     this._toBlockQueueHandled = null;
     this._queueRunAborted = false;
     this._queueStepComplete = false;
-    const { bgColor, iconColor } = getThemeColors();
-    this.blockerBgColor = bgColor;
-    this.blockerColor = iconColor;
 
     // Initialize settings
     this.settingsManager = new window.OneClickBlockerSettings.SettingsManager();
@@ -196,7 +193,6 @@ class TwitterBlocker {
     void this.handleBlockCompletion(mutation);
     this.handleGrokButtonOverlap(mutation);
     this.addBlockButtonsToEngagementsPages(mutation);
-    // this.addBlockAllButtonToEngagementsPages(mutation);
   }
 
   initMessageListener() {
@@ -290,18 +286,6 @@ class TwitterBlocker {
       this._didAttemptAutoBlock = true;
       actionButton.click();
     }, 20);
-  }
-
-  async sendActionRequest(username) {
-    const action = await this.getCurrentAction();
-    chrome.runtime.sendMessage(
-      { 
-        type: "open_tab", 
-        username, 
-        action,
-        [action]: true 
-      }
-    );
   }
 
   async addBlockButtonsToTimelines(mutation) {
@@ -878,15 +862,6 @@ class TwitterBlocker {
     return true;
   }
 
-  emitToBlockQueueEvent(type, username) {
-    const normalized = AccountData.listUsernameKey(username) || username;
-    chrome.runtime.sendMessage({
-      type: 'to_block_queue_feedback',
-      eventType: type,
-      username: normalized
-    });
-  }
-
   async tagUserAsNotFoundInQueue(username) {
     this._queueStepComplete = true;
   }
@@ -1016,7 +991,7 @@ class TwitterBlocker {
     }
   }
 
-  async saveUserToStorage(username, action, notifyQueue = false) {
+  async saveUserToStorage(username, action) {
     try {
       await this.syncLoggedInAccount();
       const settings = await this.settingsManager.loadSettings(this.getOwnHandle(), { persist: false });
@@ -1034,9 +1009,6 @@ class TwitterBlocker {
       if (!settings.stats.mutedUsers) settings.stats.mutedUsers = [];
 
       const queue = settings.toBlockUsers || [];
-      const wasInQueue = queue.some(
-        (u) => u.toLowerCase() === username.toLowerCase()
-      );
       const nextQueue = queue.filter(
         (u) => u.toLowerCase() !== username.toLowerCase()
       );
@@ -1063,10 +1035,6 @@ class TwitterBlocker {
         toBlockUsers: nextQueue,
         toBlockNotFoundUsers: notFoundUsers
       }, this.getOwnHandle());
-
-      if (notifyQueue && wasInQueue) {
-        this.emitToBlockQueueEvent(action === 'mute' ? 'muted' : 'blocked', username);
-      }
     } catch (error) {
       console.error('Error saving user to storage:', error);
     }
@@ -1145,28 +1113,6 @@ class TwitterBlocker {
         type: "feedback",
         data: "sending message to background script after receiving one"
       });
-    }
-  }
-
-  autoBlockUserFromStatusPageParam() {
-    const username = location.pathname.split("/")[1];
-    const statusId = location.pathname.split("/").pop();
-    const urlParams = new URLSearchParams(window.location.search);
-    const block = urlParams.get("block");
-
-    if (!block) return;
-
-    const blockButtons = document.querySelectorAll(".sw-block-button");
-    for (const blockButton of blockButtons) {
-      if (
-        blockButton.closest("article").querySelector(`a[href*="${statusId}"]`)
-      ) {
-        blockButton.click();
-        chrome.runtime.sendMessage(
-          { type: "feedback", data: "block_button_clicked", username }
-        );
-        break;
-      }
     }
   }
 
@@ -1261,94 +1207,6 @@ class TwitterBlocker {
 
     this.getElementsFromMutation(mutation, CONFIG.selectors.followButton).forEach((followButton) => {
       this.attachBlockButtonToFollowButton(followButton);
-    });
-  }
-
-  createBlockAllButton() {
-    const blockAllButton = document.createElement("button");
-    blockAllButton.textContent = "Block All";
-    blockAllButton.id = "block-all-button";
-    Object.assign(blockAllButton.style, {
-      backgroundColor: this.blockerBgColor,
-      border: "none",
-      padding: "10px",
-      cursor: "pointer",
-      borderRadius: "5px",
-      marginRight: "20px",
-      fontSize: "1em",
-      transition: "all 0.1s ease-in-out",
-      boxSizing: "border-box",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      placeSelf: "center",
-      height: "35px",
-      width: "120px",
-      color: "firebrick",
-      marginTop: "5px",
-      marginBottom: "5px"
-    });
-
-    blockAllButton.addEventListener("mouseenter", () => {
-      Object.assign(blockAllButton.style, {
-        backgroundColor: "peachpuff",
-        color: "crimson",
-        fontSize: "1.1em"
-      });
-    });
-
-    blockAllButton.addEventListener("mouseleave", () => {
-      Object.assign(blockAllButton.style, {
-        backgroundColor: this.blockerBgColor,
-        color: "firebrick",
-        fontSize: "1em"
-      });
-    });
-
-    return blockAllButton;
-  }
-
-  async waitForUsernamesRemoved(usernames) {
-    let allRemoved = false;
-    let waitDuration = 1000;
-    
-    while (!allRemoved) {
-      await new Promise((resolve) => setTimeout(resolve, waitDuration));
-
-      if (this.somethingWentWrong) {
-        console.log("something went wrong, waiting for 60 seconds");
-        waitDuration = 60000;
-      }
-
-      allRemoved = usernames.every(
-        (username) => !document.querySelector(`[href="/${username}"]`)
-      );
-    }
-  }
-
-  addBlockAllButtonToEngagementsPages(mutation) {
-    const nav = mutation.target.querySelector("[href*=retweets]")?.closest("nav");
-    if (!nav || document.querySelector("#block-all-button")) return;
-
-    const blockAllButton = this.createBlockAllButton();
-    nav.parentElement.insertBefore(blockAllButton, nav.nextSibling);
-
-    blockAllButton.addEventListener("click", async () => {
-      while (true) {
-        const followButtons = Array.from(
-          document.querySelectorAll(CONFIG.selectors.followButton)
-        );
-        if (followButtons.length === 0) break;
-
-        const batch = followButtons.slice(0, 5);
-        const usernames = batch.map((followButton) => {
-          const username = followButton?.getAttribute("aria-label")?.split("@")?.[1];
-          this.sendBlockRequest(username);
-          return username;
-        });
-
-        await this.waitForUsernamesRemoved(usernames);
-      }
     });
   }
 }

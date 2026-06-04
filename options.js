@@ -109,7 +109,6 @@ class OptionsManager {
     this._queueSelected = new Set();
     this._queueRunning = false;
     this._queueUserStopped = false;
-    this._queueStoragePatchTimer = null;
     this._queueLastProcessingHandle = null;
     this._suppressStorageRefresh = false;
     this._loadSettingsPromise = null;
@@ -272,12 +271,6 @@ class OptionsManager {
     if (handle) {
       settings = AccountData.switchActiveAccount(settings, handle);
     }
-    return settings;
-  }
-
-  async loadStoredSettings(detectedHandle) {
-    const settings = await this.readStoredSettings(detectedHandle);
-    await this.persistSettings(settings, { skipUi: true });
     return settings;
   }
 
@@ -1913,10 +1906,6 @@ class OptionsManager {
     this.renderUserList('muted-users-list', users, 'muted');
   }
 
-  showSaveNotice(message = 'Settings saved!') {
-    this.toast(message, { kind: 'success' });
-  }
-
   focusCurrentTabSearch() {
     const panel = document.querySelector('.tab-panel.active');
     if (!panel) return false;
@@ -2117,13 +2106,6 @@ class OptionsManager {
           return;
         }
         if (this.focusCurrentTabSearch()) e.preventDefault();
-      }
-    });
-
-    chrome.runtime.onMessage.addListener((message) => {
-      if (message.type === 'to_block_queue_feedback' && !this._queueRunning) {
-        this.showToBlockFeedback({ type: message.eventType, username: message.username });
-        void this.refreshUIFromStorage();
       }
     });
 

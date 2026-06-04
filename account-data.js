@@ -768,12 +768,6 @@ function removeToBlockNotFoundTag(notFoundList, username) {
   return (notFoundList || []).filter((u) => listUsernameKey(u) !== key);
 }
 
-function isToBlockTryAgainTagged(username, tryAgainList) {
-  const key = listUsernameKey(username);
-  if (!key) return false;
-  return (tryAgainList || []).some((u) => listUsernameKey(u) === key);
-}
-
 function addToBlockTryAgainTag(tryAgainList, username) {
   const key = listUsernameKey(username);
   if (!key) return tryAgainList || [];
@@ -797,16 +791,6 @@ function moveToBlockUserToQueueEnd(queue, username) {
   if (!match) return queue || [];
   rest.push(match);
   return rest;
-}
-
-function findNextToBlockQueueUser(account) {
-  const queue = account?.toBlockUsers || [];
-  const notFound = account?.toBlockNotFoundUsers || [];
-  for (const username of queue) {
-    if (isToBlockNotFoundTagged(username, notFound)) continue;
-    return username;
-  }
-  return null;
 }
 
 function filterUsernamesForToBlockQueue(usernames, stats, queueAction = 'block') {
@@ -859,11 +843,9 @@ const AccountData = {
   isToBlockNotFoundTagged,
   addToBlockNotFoundTag,
   removeToBlockNotFoundTag,
-  isToBlockTryAgainTagged,
   addToBlockTryAgainTag,
   removeToBlockTryAgainTag,
   moveToBlockUserToQueueEnd,
-  findNextToBlockQueueUser,
   mergeUsernameLists,
   mergeStoredAccountLists,
   mergeAccountListStorageRecords,

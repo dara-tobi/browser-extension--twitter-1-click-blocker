@@ -330,20 +330,6 @@ function getBulkQueueAction(accountOrSettings) {
   return accountOrSettings?.bulkQueueAction === 'mute' ? 'mute' : 'block';
 }
 
-async function removeUsernameFromToBlockQueue(username) {
-  const { handle, account } = await loadActiveQueueAccount();
-  if (!handle || !account) return [];
-  const toBlockUsers = (account.toBlockUsers || []).filter(
-    (u) => u.toLowerCase() !== username.toLowerCase()
-  );
-  const toBlockNotFoundUsers = AccountData.removeToBlockNotFoundTag(
-    account.toBlockNotFoundUsers,
-    username
-  );
-  await AccountData.patchLocalAccountList(handle, { toBlockUsers, toBlockNotFoundUsers });
-  return toBlockUsers;
-}
-
 async function skipAlreadyActionedQueueHead() {
   const { handle, account: initial } = await loadActiveQueueAccount();
   if (!handle || !initial) return null;
