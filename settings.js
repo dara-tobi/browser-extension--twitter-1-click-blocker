@@ -82,11 +82,13 @@ class SettingsManager {
         this.loadSettings();
     }
 
-    async loadSettings(detectedHandle) {
+    async loadSettings(detectedHandle, options = {}) {
         try {
             let settings = await AccountData.loadFromChromeStorage(DEFAULT_SETTINGS);
             settings = AccountData.migrateSettings(settings, detectedHandle);
-            await AccountData.saveToChromeStorage(settings);
+            if (options.persist !== false) {
+                await AccountData.saveToChromeStorage(settings);
+            }
             this.settings = settings;
             this.resolvedSettings = AccountData.resolveForActiveAccount(settings);
             return this.resolvedSettings;

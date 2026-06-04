@@ -56,9 +56,12 @@ class TwitterBlocker {
     this.lastSyncedHandle = null;
     this._didAttemptAutoBlock = false;
     this._skipProfileAutoBlock = false;
-    this._queueProfileUsername = null;
     this._profileMuteDoneThisSession = false;
     this._profileBlockDoneThisSession = false;
+    this._queueProfileUsername = null;
+    this._toBlockQueueHandled = null;
+    this._queueRunAborted = false;
+    this._queueStepComplete = false;
     const { bgColor, iconColor } = getThemeColors();
     this.blockerBgColor = bgColor;
     this.blockerColor = iconColor;
@@ -71,7 +74,20 @@ class TwitterBlocker {
     this.initMutationObserver();
     this.initNavigationListener();
     this.initMessageListener();
+    this.initQueueRunAbortListener();
     this.startHandleDetection();
+  }
+
+  initQueueRunAbortListener() {
+    if (this.isToBlockQueueProfileTab()) {
+      chrome.storage.local.get('toBlockQueueRunning', (data) => {
+        this._queueRunAborted = data.toBlockQueueRunning !== true;
+      });
+    }
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local' || !changes.toBlockQueueRunning) return;
+      this._queueRunAborted = changes.toBlockQueueRunning.newValue === false;
+    });
   }
 
   startHandleDetection() {
@@ -155,8 +171,12 @@ class TwitterBlocker {
 
   async handleDOMMutation(mutation) {
     this.setUsername();
-    const queueProfileHandled = await this.handleToBlockQueueProfilePage(mutation);
-    if (queueProfileHandled) {
+    if (this.isToBlockQueueProfileTab()) {
+      if (this._queueRunAborted || this._queueStepComplete) return;
+      const queueProfileHandled = await this.handleToBlockQueueProfilePage(mutation);
+      if (queueProfileHandled) return;
+      this.handleProfilePageBlockButton(mutation);
+      void this.handleBlockCompletion(mutation);
       return;
     }
     const handle = this.getOwnHandle();
@@ -257,10 +277,6 @@ class TwitterBlocker {
 
   async triggerMenuOptionClick() {
     const action = await this.getCurrentAction();
-    if (this.isToBlockQueueProfileTab() && this.hasProfileUnblockButton(action)) {
-      return;
-    }
-
     chrome.runtime.sendMessage(
       { type: "feedback", data: "trying to click action button" }
     );
@@ -274,9 +290,6 @@ class TwitterBlocker {
       this.isActionClicked = false;
       if (!actionButton) return;
       this._didAttemptAutoBlock = true;
-      if (this.isToBlockQueueProfileTab()) {
-        this.markProfileActionDoneThisSession(action);
-      }
       actionButton.click();
     }, 20);
   }
@@ -361,8 +374,6 @@ class TwitterBlocker {
       this.removeProfileHeaderBlockButtons();
       return;
     }
-
-    if (this.isToBlockQueueProfileTab() && this._skipProfileAutoBlock) return;
 
     // Check if we should show the button based on the current page type
     const pageType = this.getPageType();
@@ -513,16 +524,31 @@ class TwitterBlocker {
     }
   }
 
-  hasProfileUnblockButton(action) {
-    const selector =
-      action === 'mute' ? CONFIG.selectors.profileUnmuteButton : CONFIG.selectors.profileUnblockButton;
-    const primaryColumn = document.querySelector(CONFIG.selectors.primaryColumn);
-    if (!primaryColumn) return false;
-    const el = primaryColumn.querySelector(selector);
+  isProfileUnblockButtonElement(el) {
     if (!el) return false;
     if (el.closest(CONFIG.selectors.tweet)) return false;
     if (el.closest('[role="menu"]')) return false;
     return true;
+  }
+
+  findProfileUnblockButton(action) {
+    const selector =
+      action === 'mute' ? CONFIG.selectors.profileUnmuteButton : CONFIG.selectors.profileUnblockButton;
+    const roots = [
+      document.querySelector(CONFIG.selectors.primaryColumn),
+      document.querySelector(CONFIG.selectors.placementTracking)
+    ].filter(Boolean);
+    for (const root of roots) {
+      const el = root.querySelector(selector);
+      if (this.isProfileUnblockButtonElement(el)) return el;
+    }
+    const el = document.querySelector(selector);
+    if (this.isProfileUnblockButtonElement(el)) return el;
+    return null;
+  }
+
+  hasProfileUnblockButton(action) {
+    return !!this.findProfileUnblockButton(action);
   }
 
   mutationHasProfileUnactionButton(mutation, action) {
@@ -538,11 +564,6 @@ class TwitterBlocker {
       if (nodeHasSelector(node)) return true;
     }
     return false;
-  }
-
-  getQueueProfileAction() {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('mute') ? 'mute' : 'block';
   }
 
   async runAutoBlockIfNeeded(blockButton) {
@@ -759,11 +780,11 @@ class TwitterBlocker {
 
   async handleBlockCompletion(mutation) {
     const urlParams = new URLSearchParams(window.location.search);
-    const fromQueueTab = urlParams.get('block') || urlParams.get('mute');
-    const queueAction = urlParams.get('mute') ? 'mute' : 'block';
+    const fromAutoBlockTab = urlParams.get('block') || urlParams.get('mute');
+    const autoBlockAction = urlParams.get('mute') ? 'mute' : 'block';
     if (
       this._skipProfileAutoBlock &&
-      !(fromQueueTab && this.isProfileActionDoneThisSession(queueAction))
+      !(fromAutoBlockTab && this.isProfileActionDoneThisSession(autoBlockAction))
     ) {
       return;
     }
@@ -777,7 +798,7 @@ class TwitterBlocker {
     const isMuted = mutationString.includes("muted");
     
     if (isBlocked || isMuted) {
-      if (fromQueueTab && !this._didAttemptAutoBlock) {
+      if (fromAutoBlockTab && !this._didAttemptAutoBlock) {
         return;
       }
       let username = this.usernameToAction;
@@ -795,16 +816,23 @@ class TwitterBlocker {
         // remove the @ from the username if present
         username = username.replace("@", "");
         const completedAction = isBlocked ? 'block' : 'mute';
-        if (fromQueueTab) {
+        if (fromAutoBlockTab) {
           this.markProfileActionDoneThisSession(completedAction);
         }
-        await this.saveUserToStorage(username, completedAction, true);
-        
+        if (this.isToBlockQueueProfileTab()) {
+          await this.saveQueueProfileStats(username, completedAction);
+        } else {
+          await this.saveUserToStorage(username, completedAction);
+        }
+
         // Clear the username after saving
         this.usernameToAction = null;
         
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get("block") || urlParams.get("mute")) {
+          if (this.isToBlockQueueProfileTab()) {
+            this._queueStepComplete = true;
+          }
           chrome.runtime.sendMessage({
             type: 'feedback',
             data: `${completedAction}_button_clicked`,
@@ -835,6 +863,11 @@ class TwitterBlocker {
     return segment.replace('@', '');
   }
 
+  getQueueProfileAction() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('mute') ? 'mute' : 'block';
+  }
+
   markToBlockQueueHandled(username, reason) {
     const key = `${username.toLowerCase()}:${reason}`;
     if (this._toBlockQueueHandled === key) return false;
@@ -852,31 +885,7 @@ class TwitterBlocker {
   }
 
   async tagUserAsNotFoundInQueue(username) {
-    await this.syncLoggedInAccount();
-    const settings = this.settingsManager.getSettings();
-    const notFound = AccountData.addToBlockNotFoundTag(
-      settings.toBlockNotFoundUsers || [],
-      username
-    );
-    await this.settingsManager.saveSettings({ toBlockNotFoundUsers: notFound }, this.getOwnHandle());
-    this.emitToBlockQueueEvent('not_found', username);
-  }
-
-  async removeFromToBlockQueueOnly(username, eventType) {
-    await this.syncLoggedInAccount();
-    const settings = this.settingsManager.getSettings();
-    const before = (settings.toBlockUsers || []).length;
-    const filtered = (settings.toBlockUsers || []).filter(
-      (u) => u.toLowerCase() !== username.toLowerCase()
-    );
-    if (filtered.length === before) {
-      return false;
-    }
-    await this.settingsManager.saveSettings({ toBlockUsers: filtered }, this.getOwnHandle());
-    if (eventType) {
-      this.emitToBlockQueueEvent(eventType, username);
-    }
-    return true;
+    this._queueStepComplete = true;
   }
 
   async handleQueueProfileSessionComplete(username, action) {
@@ -884,7 +893,8 @@ class TwitterBlocker {
       return false;
     }
     this._skipProfileAutoBlock = true;
-    await this.saveUserToStorage(username, action, true);
+    await this.saveQueueProfileStats(username, action);
+    this._queueStepComplete = true;
     chrome.runtime.sendMessage({
       type: 'feedback',
       data: `${action}_button_clicked`,
@@ -894,24 +904,25 @@ class TwitterBlocker {
   }
 
   async handleAlreadyBlockedOnProfile(username, action) {
-    const eventType = action === 'mute' ? 'already_muted' : 'already_blocked';
+    const alreadyMuted = this.hasProfileUnblockButton('mute');
+    const eventType = alreadyMuted ? 'already_muted' : 'already_blocked';
     this._skipProfileAutoBlock = true;
-    if (!this.markToBlockQueueHandled(username, `already_${action}`)) {
+    if (!this.markToBlockQueueHandled(username, eventType)) {
       return false;
     }
-    await this.saveUserToStorage(username, action, false);
-    this.emitToBlockQueueEvent(eventType, username);
+    this._queueStepComplete = true;
     chrome.runtime.sendMessage({
       type: 'feedback',
       data: 'already_actioned',
       username,
-      action
+      action,
+      eventType
     });
     return true;
   }
 
   async handleToBlockQueueProfilePage(mutation) {
-    if (!this.isToBlockQueueProfileTab()) return false;
+    if (this._queueRunAborted || this._queueStepComplete) return false;
     const username = this.getProfileTabUsername();
     if (!username) return false;
 
@@ -921,9 +932,21 @@ class TwitterBlocker {
       this._skipProfileAutoBlock = false;
       this._profileMuteDoneThisSession = false;
       this._profileBlockDoneThisSession = false;
+      this._queueStepComplete = false;
+      this._toBlockQueueHandled = null;
     }
 
     const action = this.getQueueProfileAction();
+
+    if (this.hasProfileUnblockButton('block')) {
+      await this.handleAlreadyBlockedOnProfile(username, action);
+      return true;
+    }
+
+    if (this.hasProfileUnblockButton('mute')) {
+      await this.handleAlreadyBlockedOnProfile(username, action);
+      return true;
+    }
 
     if (
       this.isProfileActionDoneThisSession(action) &&
@@ -941,12 +964,11 @@ class TwitterBlocker {
       return false;
     }
 
-    if (this.hasProfileUnblockButton(action)) {
-      await this.handleAlreadyBlockedOnProfile(username, action);
-      return true;
-    }
-
-    if (this.isProfileUnavailable()) {
+    if (
+      this.isProfileUnavailable() &&
+      !this.hasProfileUnblockButton('block') &&
+      !document.querySelector(CONFIG.selectors.userActions)
+    ) {
       if (!this.markToBlockQueueHandled(username, 'not_found')) return false;
       this._skipProfileAutoBlock = true;
       await this.tagUserAsNotFoundInQueue(username);
@@ -957,10 +979,41 @@ class TwitterBlocker {
     return false;
   }
 
+  async saveQueueProfileStats(username, action) {
+    try {
+      await this.syncLoggedInAccount();
+      const settings = await this.settingsManager.loadSettings(this.getOwnHandle(), { persist: false });
+      if (!settings.stats) {
+        settings.stats = {
+          totalBlocks: 0,
+          totalMutes: 0,
+          blockedUsers: [],
+          mutedUsers: []
+        };
+      }
+      if (!settings.stats.blockedUsers) settings.stats.blockedUsers = [];
+      if (!settings.stats.mutedUsers) settings.stats.mutedUsers = [];
+      if (action === 'block') {
+        if (!settings.stats.blockedUsers.includes(username)) {
+          settings.stats.blockedUsers.push(username);
+          settings.stats.totalBlocks = (settings.stats.totalBlocks || 0) + 1;
+        }
+      } else if (action === 'mute') {
+        if (!settings.stats.mutedUsers.includes(username)) {
+          settings.stats.mutedUsers.push(username);
+          settings.stats.totalMutes = (settings.stats.totalMutes || 0) + 1;
+        }
+      }
+      await this.settingsManager.saveSettings({ stats: settings.stats }, this.getOwnHandle());
+    } catch (error) {
+      console.error('Error saving queue profile stats:', error);
+    }
+  }
+
   async saveUserToStorage(username, action, notifyQueue = false) {
     try {
       await this.syncLoggedInAccount();
-      const settings = this.settingsManager.getSettings();
+      const settings = await this.settingsManager.loadSettings(this.getOwnHandle());
 
       if (!settings.stats) {
         settings.stats = {
@@ -974,15 +1027,13 @@ class TwitterBlocker {
       if (!settings.stats.blockedUsers) settings.stats.blockedUsers = [];
       if (!settings.stats.mutedUsers) settings.stats.mutedUsers = [];
 
-      const wasInQueue = (settings.toBlockUsers || []).some(
+      const queue = settings.toBlockUsers || [];
+      const wasInQueue = queue.some(
         (u) => u.toLowerCase() === username.toLowerCase()
       );
-
-      if (settings.toBlockUsers?.length) {
-        settings.toBlockUsers = settings.toBlockUsers.filter(
-          (u) => u.toLowerCase() !== username.toLowerCase()
-        );
-      }
+      const nextQueue = queue.filter(
+        (u) => u.toLowerCase() !== username.toLowerCase()
+      );
 
       const notFoundUsers = AccountData.removeToBlockNotFoundTag(
         settings.toBlockNotFoundUsers || [],
@@ -1003,7 +1054,7 @@ class TwitterBlocker {
 
       await this.settingsManager.saveSettings({
         stats: settings.stats,
-        toBlockUsers: settings.toBlockUsers || [],
+        toBlockUsers: nextQueue,
         toBlockNotFoundUsers: notFoundUsers
       }, this.getOwnHandle());
 

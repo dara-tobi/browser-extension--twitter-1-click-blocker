@@ -3,7 +3,7 @@
   "background": {
     "service_worker": "service-worker.js"
   },
-  "permissions": ["storage"],
+  "permissions": ["storage", "tabs"],
   "content_scripts": [
     {
       "matches": ["https://*.x.com/*", "https://x.com/*", "https://*.twitter.com/*", "https://twitter.com/*"],

@@ -7,8 +7,10 @@ const DEFAULT_ACCOUNT_DATA = {
   },
   toBlockUsers: [],
   toBlockNotFoundUsers: [],
+  toBlockTryAgainUsers: [],
   toBlockShowNotFound: true,
-  bulkQueueAction: 'block'
+  bulkQueueAction: 'block',
+  queueRunHistory: []
 };
 
 const RESERVED_PATH_SEGMENTS = new Set([
@@ -197,8 +199,10 @@ function getAccount(settings, accountKey) {
     },
     toBlockUsers: account.toBlockUsers || [],
     toBlockNotFoundUsers: account.toBlockNotFoundUsers || [],
+    toBlockTryAgainUsers: account.toBlockTryAgainUsers || [],
     toBlockShowNotFound: account.toBlockShowNotFound !== false,
-    bulkQueueAction: account.bulkQueueAction || 'block'
+    bulkQueueAction: account.bulkQueueAction || 'block',
+    queueRunHistory: account.queueRunHistory || []
   };
 }
 
@@ -209,8 +213,10 @@ function setAccount(settings, accountKey, accountData) {
     stats: accountData.stats || defaultAccountData().stats,
     toBlockUsers: accountData.toBlockUsers || [],
     toBlockNotFoundUsers: accountData.toBlockNotFoundUsers || [],
+    toBlockTryAgainUsers: accountData.toBlockTryAgainUsers || [],
     toBlockShowNotFound: accountData.toBlockShowNotFound !== false,
-    bulkQueueAction: accountData.bulkQueueAction || 'block'
+    bulkQueueAction: accountData.bulkQueueAction || 'block',
+    queueRunHistory: accountData.queueRunHistory || []
   };
   settings.activeAccount = accountKey;
   return settings;
@@ -247,15 +253,18 @@ function hasLegacyRootListData(settings) {
   const stats = settings.stats;
   return !!(
     (stats?.blockedUsers?.length) ||
-    (stats?.mutedUsers?.length) ||
-    (settings.toBlockUsers?.length)
+    (stats?.mutedUsers?.length)
   );
 }
 
 function stripLegacyRootListFields(settings) {
   delete settings.stats;
   delete settings.toBlockUsers;
+  delete settings.toBlockNotFoundUsers;
+  delete settings.toBlockRetryUsers;
+  delete settings.toBlockShowNotFound;
   delete settings.bulkQueueAction;
+  delete settings.toBlockQueueRunHistory;
 }
 
 function migrateSettings(settings, detectedHandle) {
@@ -346,8 +355,10 @@ function resolveForActiveAccount(settings) {
     stats: account.stats,
     toBlockUsers: account.toBlockUsers,
     toBlockNotFoundUsers: account.toBlockNotFoundUsers,
+    toBlockTryAgainUsers: account.toBlockTryAgainUsers,
     toBlockShowNotFound: account.toBlockShowNotFound,
-    bulkQueueAction: account.bulkQueueAction
+    bulkQueueAction: account.bulkQueueAction,
+    queueRunHistory: account.queueRunHistory
   };
 }
 
@@ -363,11 +374,17 @@ function updateActiveAccountLists(settings, listsUpdate) {
   if (listsUpdate.toBlockNotFoundUsers !== undefined) {
     account.toBlockNotFoundUsers = listsUpdate.toBlockNotFoundUsers;
   }
+  if (listsUpdate.toBlockTryAgainUsers !== undefined) {
+    account.toBlockTryAgainUsers = listsUpdate.toBlockTryAgainUsers;
+  }
   if (listsUpdate.toBlockShowNotFound !== undefined) {
     account.toBlockShowNotFound = listsUpdate.toBlockShowNotFound;
   }
   if (listsUpdate.bulkQueueAction !== undefined) {
     account.bulkQueueAction = listsUpdate.bulkQueueAction;
+  }
+  if (listsUpdate.queueRunHistory !== undefined) {
+    account.queueRunHistory = listsUpdate.queueRunHistory;
   }
   return setAccount(settings, key, account);
 }
@@ -413,7 +430,11 @@ function reassignAccountData(settings, newHandleRaw) {
       mutedUsers: mergeUsers(oldData.stats.mutedUsers, existingNew.stats.mutedUsers)
     },
     toBlockUsers: mergeUsers(oldData.toBlockUsers, existingNew.toBlockUsers),
-    bulkQueueAction: oldData.bulkQueueAction || existingNew.bulkQueueAction
+    toBlockNotFoundUsers: mergeUsers(oldData.toBlockNotFoundUsers, existingNew.toBlockNotFoundUsers),
+    toBlockTryAgainUsers: mergeUsers(oldData.toBlockTryAgainUsers, existingNew.toBlockTryAgainUsers),
+    toBlockShowNotFound: oldData.toBlockShowNotFound,
+    bulkQueueAction: oldData.bulkQueueAction || existingNew.bulkQueueAction,
+    queueRunHistory: [...(existingNew.queueRunHistory || []), ...(oldData.queueRunHistory || [])]
   };
   settings.accounts[newKey].stats.totalBlocks = settings.accounts[newKey].stats.blockedUsers.length;
   settings.accounts[newKey].stats.totalMutes = settings.accounts[newKey].stats.mutedUsers.length;
@@ -440,8 +461,10 @@ function extractAccountListsFromSettings(settings) {
       },
       toBlockUsers: account.toBlockUsers || [],
       toBlockNotFoundUsers: account.toBlockNotFoundUsers || [],
+      toBlockTryAgainUsers: account.toBlockTryAgainUsers || [],
       toBlockShowNotFound: account.toBlockShowNotFound !== false,
-      bulkQueueAction: account.bulkQueueAction || 'block'
+      bulkQueueAction: account.bulkQueueAction || 'block',
+      queueRunHistory: account.queueRunHistory || []
     };
   }
   return accountLists;
@@ -466,11 +489,29 @@ function slimAccountsForSync(settings) {
   return out;
 }
 
+function mergeAccountListsFromStorageRecord(account) {
+  const stats = account?.stats || {};
+  return {
+    stats: {
+      totalBlocks: stats.totalBlocks || 0,
+      totalMutes: stats.totalMutes || 0,
+      blockedUsers: stats.blockedUsers || [],
+      mutedUsers: stats.mutedUsers || []
+    },
+    toBlockUsers: account.toBlockUsers || [],
+    toBlockNotFoundUsers: account.toBlockNotFoundUsers || [],
+    toBlockTryAgainUsers: account.toBlockTryAgainUsers || [],
+    toBlockShowNotFound: account.toBlockShowNotFound !== false,
+    bulkQueueAction: account.bulkQueueAction || 'block',
+    queueRunHistory: account.queueRunHistory || []
+  };
+}
+
 function mergeAccountListsIntoSettings(settings, accountLists) {
   if (!accountLists) return settings;
   settings.accounts = settings.accounts || {};
   for (const key of Object.keys(accountLists)) {
-    settings.accounts[key] = accountLists[key];
+    settings.accounts[key] = mergeAccountListsFromStorageRecord(accountLists[key]);
   }
   return settings;
 }
@@ -558,6 +599,37 @@ function removeToBlockNotFoundTag(notFoundList, username) {
   return (notFoundList || []).filter((u) => listUsernameKey(u) !== key);
 }
 
+function isToBlockTryAgainTagged(username, tryAgainList) {
+  const key = listUsernameKey(username);
+  if (!key) return false;
+  return (tryAgainList || []).some((u) => listUsernameKey(u) === key);
+}
+
+function addToBlockTryAgainTag(tryAgainList, username) {
+  const key = listUsernameKey(username);
+  if (!key) return tryAgainList || [];
+  const list = [...(tryAgainList || [])];
+  if (list.some((u) => listUsernameKey(u) === key)) return list;
+  list.push(key);
+  return list;
+}
+
+function removeToBlockTryAgainTag(tryAgainList, username) {
+  const key = listUsernameKey(username);
+  if (!key) return tryAgainList || [];
+  return (tryAgainList || []).filter((u) => listUsernameKey(u) !== key);
+}
+
+function moveToBlockUserToQueueEnd(queue, username) {
+  const key = listUsernameKey(username);
+  if (!key) return queue || [];
+  const match = (queue || []).find((u) => listUsernameKey(u) === key);
+  const rest = (queue || []).filter((u) => listUsernameKey(u) !== key);
+  if (!match) return queue || [];
+  rest.push(match);
+  return rest;
+}
+
 function findNextToBlockQueueUser(account) {
   const queue = account?.toBlockUsers || [];
   const notFound = account?.toBlockNotFoundUsers || [];
@@ -618,6 +690,10 @@ const AccountData = {
   isToBlockNotFoundTagged,
   addToBlockNotFoundTag,
   removeToBlockNotFoundTag,
+  isToBlockTryAgainTagged,
+  addToBlockTryAgainTag,
+  removeToBlockTryAgainTag,
+  moveToBlockUserToQueueEnd,
   findNextToBlockQueueUser
 };
 

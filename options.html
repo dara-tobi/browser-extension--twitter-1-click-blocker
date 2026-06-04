@@ -1,517 +1,362 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <title>One-Click Blocker Settings</title>
-  <style>
-    :root {
-      --twitter-blue: rgb(29, 155, 240);
-      --twitter-background: rgb(239, 243, 244);
-      --twitter-border: rgb(207, 217, 222);
-      --twitter-text: rgb(15, 20, 25);
-      --twitter-hover: rgba(15, 20, 25, 0.1);
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: white;
-      color: var(--twitter-text);
-    }
-
-    .container {
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-
-    .header {
-      display: flex;
-      align-items: center;
-      padding: 16px;
-      border-bottom: 1px solid var(--twitter-border);
-      position: sticky;
-      top: 0;
-      background: white;
-      z-index: 1000;
-    }
-
-    .header h1 {
-      font-size: 20px;
-      font-weight: bold;
-      margin: 0;
-    }
-
-    .nav {
-      display: flex;
-      gap: 16px;
-      padding: 16px;
-      border-bottom: 1px solid var(--twitter-border);
-    }
-
-    .nav-item {
-      padding: 12px 16px;
-      border-radius: 20px;
-      cursor: pointer;
-      font-weight: bold;
-      transition: background-color 0.2s;
-    }
-
-    .nav-item:hover {
-      background-color: var(--twitter-hover);
-    }
-
-    .nav-item.active {
-      color: var(--twitter-blue);
-    }
-
-    .section {
-      padding: 20px;
-      border-bottom: 1px solid var(--twitter-border);
-    }
-
-    .section-title {
-      font-size: 18px;
-      font-weight: bold;
-      margin-bottom: 16px;
-    }
-
-    .section-subtitle {
-      font-size: 16px;
-      font-weight: bold;
-      margin-bottom: 8px;
-    }
-
-    .option-group {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 24px;
-    }
-
-    .option {
-      display: flex;
-      align-items: center;
-      border-radius: 4px;
-      transition: background-color 0.2s;
-      padding: 0 12px;
-    }
-
-    .option:hover {
-      background-color: var(--twitter-background);
-    }
-
-    .option label {
-      cursor: pointer;
-      padding: 12px;
-      flex-grow: 1;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    input[type="radio"],
-    input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-      margin: 0;
-      flex-shrink: 0;
-    }
-
-    .button {
-      background-color: var(--twitter-blue);
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 20px;
-      font-weight: bold;
-      cursor: pointer;
-      transition: background-color 0.2s;
-    }
-
-    .button:hover {
-      background-color: rgb(26, 140, 216);
-    }
-
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .stat-card {
-      background-color: var(--twitter-background);
-      padding: 16px;
-      border-radius: 16px;
-      text-align: center;
-    }
-
-    .stat-number {
-      font-size: 24px;
-      font-weight: bold;
-      margin-bottom: 8px;
-    }
-
-    .stat-label {
-      color: rgb(83, 100, 113);
-    }
-
-    #blocked-users-list,
-    #to-block-users-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .blocked-user {
-      display: block;
-      padding: 0;
-      background-color: var(--twitter-background);
-      border-radius: 8px;
-      transition: background-color 0.2s;
-      margin-bottom: 8px;
-    }
-
-    .blocked-user:hover {
-      background-color: var(--twitter-hover);
-    }
-
-    .user-link {
-      color: var(--twitter-text);
-      text-decoration: none;
-      font-weight: 500;
-      transition: color 0.2s;
-      display: block;
-      padding: 16px;
-      width: 100%;
-      box-sizing: border-box;
-    }
-
-    .user-link:hover {
-      color: var(--twitter-blue);
-    }
-
-    .save-notice {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background-color: var(--twitter-blue);
-      color: white;
-      padding: 12px 24px;
-      border-radius: 20px;
-      opacity: 0;
-      transition: opacity 0.3s;
-    }
-
-    .save-notice.visible {
-      opacity: 1;
-    }
-
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
-    .to-block-not-found-tag {
-      font-size: 12px;
-      color: rgb(83, 100, 113);
-      margin-left: 8px;
-      font-weight: normal;
-    }
-
-    .export-options {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .button-group {
-      display: flex;
-      gap: 8px;
-    }
-
-    .button.danger {
-      background-color: rgb(231, 76, 60);
-    }
-
-    .button.danger:hover {
-      background-color: rgb(192, 57, 43);
-    }
-
-    .import-section {
-      margin-bottom: 24px;
-    }
-
-    .import-hint {
-      color: rgb(83, 100, 113);
-      font-size: 14px;
-      line-height: 1.4;
-      margin: 0 0 12px 0;
-    }
-
-    .to-block-user {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .to-block-user .user-link {
-      flex: 1;
-    }
-
-    .to-block-user-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-
-    .to-block-user-actions .button {
-      padding: 8px 16px;
-      margin: 8px 0;
-      font-size: 13px;
-    }
-
-    .button-group {
-      flex-wrap: wrap;
-    }
-
-    .account-handle-row {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-      margin-top: 8px;
-    }
-
-    .account-handle-prefix {
-      font-weight: bold;
-    }
-
-    .account-handle-input {
-      flex: 1;
-      min-width: 140px;
-      padding: 10px 14px;
-      border: 1px solid var(--twitter-border);
-      border-radius: 8px;
-      font-size: 14px;
-    }
-
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>1-click blocker for Twitter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="options.css">
 </head>
 <body>
-  <div id="settings-app">
-  <div class="header">
-    <h1>One-Click Blocker Settings</h1>
-  </div>
+  <div class="app" id="settings-app">
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
-  <div class="nav">
-    <div class="nav-item active" data-tab="settings">Settings</div>
-    <div class="nav-item" data-tab="to-block">To Block</div>
-    <div class="nav-item" data-tab="blocked">Blocked Users</div>
-    <div class="nav-item" data-tab="muted">Muted Users</div>
-    <div class="nav-item" data-tab="stats">Statistics</div>
-    <div class="nav-item" data-tab="backup">Backup & Restore</div>
-  </div>
-
-  <div class="container">
-    <div id="settings" class="tab-content active">
-      <div class="section account-association">
-        <div class="section-title">Your X account</div>
-        <p class="import-hint">Block and mute lists are saved for this handle.</p>
-        <div class="account-handle-row">
-          <span class="account-handle-prefix">Lists for @</span>
-          <input type="text" id="active-account-input" class="account-handle-input" autocomplete="off" spellcheck="false">
-          <button type="button" class="button" id="save-account-handle">Save</button>
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark" id="brand-mark-icon">
+          <img src="images/one-click-blocker.png" alt="" width="36" height="36" decoding="async">
         </div>
-      </div>
-      <div class="section">
-        <div class="section-title">Default Action</div>
-        <div class="option-group">
-          <div class="option">
-            <input type="radio" id="action-block" name="action" value="block">
-            <label for="action-block">Block</label>
-          </div>
-          <div class="option">
-            <input type="radio" id="action-mute" name="action" value="mute">
-            <label for="action-mute">Mute</label>
-          </div>
+        <div>
+          <div class="brand-name">1-click blocker</div>
+          <div class="brand-tag">for Twitter</div>
         </div>
       </div>
 
-      <div class="section">
-        <div class="section-title">Interface Settings</div>
-        <div class="option-group">
-          <div class="option">
-            <input type="checkbox" id="show-settings-icon" name="show-settings-icon">
-            <label for="show-settings-icon">Show settings icon on Twitter pages</label>
-          </div>
-        </div>
-      </div>
+      <nav class="nav">
+        <div class="nav-label">Moderation</div>
+        <button type="button" class="nav-item active" data-tab="queue">
+          <span class="nav-ico" data-icon="queue"></span>
+          <span class="label">To Block</span>
+          <span class="nav-count tnum" id="nav-count-queue" hidden>0</span>
+          <span class="nav-dot" id="nav-queue-live" hidden title="Queue in progress"></span>
+        </button>
+        <button type="button" class="nav-item" data-tab="settings">
+          <span class="nav-ico" data-icon="gear"></span>
+          <span class="label">Settings</span>
+        </button>
+        <button type="button" class="nav-item" data-tab="blocked">
+          <span class="nav-ico" data-icon="block"></span>
+          <span class="label">Blocked</span>
+          <span class="nav-count tnum" id="nav-count-blocked" hidden>0</span>
+        </button>
+        <button type="button" class="nav-item" data-tab="muted">
+          <span class="nav-ico" data-icon="mute"></span>
+          <span class="label">Muted</span>
+          <span class="nav-count tnum" id="nav-count-muted" hidden>0</span>
+        </button>
+        <div class="nav-label">Account</div>
+        <button type="button" class="nav-item" data-tab="stats">
+          <span class="nav-ico" data-icon="stats"></span>
+          <span class="label">Statistics</span>
+        </button>
+        <button type="button" class="nav-item" data-tab="backup">
+          <span class="nav-ico" data-icon="backup"></span>
+          <span class="label">Backup &amp; Restore</span>
+        </button>
+      </nav>
 
-      <div class="section">
-        <div class="section-title">Show Button On</div>
-        <div class="option-group">
-          <div class="option">
-            <input type="checkbox" id="page-timeline" name="pages" value="timeline">
-            <label for="page-timeline">Home Timeline</label>
-          </div>
-          <div class="option">
-            <input type="checkbox" id="page-followers" name="pages" value="followers">
-            <label for="page-followers">Followers</label>
-          </div>
-          <div class="option">
-            <input type="checkbox" id="page-following" name="pages" value="following">
-            <label for="page-following">Following</label>
-          </div>
-          <div class="option">
-            <input type="checkbox" id="page-search" name="pages" value="search">
-            <label for="page-search">Search Results</label>
-          </div>
-          <div class="option">
-            <input type="checkbox" id="page-communities" name="pages" value="communities">
-            <label for="page-communities">Communities</label>
-          </div>
-          <div class="option">
-            <input type="checkbox" id="page-engagements" name="pages" value="engagements">
-            <label for="page-engagements">Engagements (Retweets/Quotes/Likes)</label>
-          </div>
-          <div class="option">
-            <input type="checkbox" id="page-status" name="pages" value="status">
-            <label for="page-status">Tweet Replies</label>
-          </div>
-          <div class="option">
-            <input type="checkbox" id="page-trending" name="pages" value="trending">
-            <label for="page-trending">Trending</label>
-          </div>
-          <div class="option">
-            <input type="checkbox" id="page-notifications" name="pages" value="notifications">
-            <label for="page-notifications">Notifications</label>
-          </div>
-          <div class="option">
-            <input type="checkbox" id="page-hashtag" name="pages" value="hashtag">
-            <label for="page-hashtag">Hashtags</label>
-          </div>
-          <div class="option">
-            <input type="checkbox" id="page-profile" name="pages" value="profile">
-            <label for="page-profile">Profile pages</label>
-          </div>
-          <div class="option">
-            <input type="checkbox" id="page-explore" name="pages" value="explore">
-            <label for="page-explore">Explore</label>
-          </div>
+      <div class="nav-foot">
+        <div class="theme-toggle" role="group" aria-label="Theme">
+          <button type="button" id="theme-light" data-theme="light"></button>
+          <button type="button" id="theme-dark" class="on" data-theme="dark"></button>
         </div>
-      </div>
-    </div>
-
-    <div id="to-block" class="tab-content">
-      <div class="section">
-        <div class="section-title">To Block</div>
-        <p class="import-hint">Queue of accounts to block or mute via the extension. Import from JSON backup export (reads blocked users even if settings are included) or CSV.</p>
-        <div class="section-subtitle">Bulk action</div>
-        <div class="option-group">
-          <div class="option">
-            <input type="radio" id="bulk-queue-block" name="bulk-queue-action" value="block" checked>
-            <label for="bulk-queue-block">Block</label>
-          </div>
-          <div class="option">
-            <input type="radio" id="bulk-queue-mute" name="bulk-queue-action" value="mute">
-            <label for="bulk-queue-mute">Mute</label>
-          </div>
-        </div>
-        <div class="import-section">
-          <div class="button-group">
-            <button class="button" id="import-to-block">Import List</button>
-            <button class="button" id="start-to-block-queue">Start Blocking</button>
-            <button class="button danger" id="stop-to-block-queue">Stop</button>
-            <button class="button danger" id="clear-to-block-queue">Clear Queue</button>
-          </div>
-        </div>
-        <p class="import-hint" id="to-block-queue-status"></p>
-        <div class="option">
-          <input type="checkbox" id="show-to-block-not-found" checked>
-          <label for="show-to-block-not-found">Show suspended and deleted accounts</label>
-        </div>
-        <div id="to-block-users-list">
-          <!-- Will be populated by JavaScript -->
-        </div>
-      </div>
-    </div>
-
-    <div id="blocked" class="tab-content">
-      <div class="section">
-        <div class="section-title">Blocked Users</div>
-        <div id="blocked-users-list">
-          <!-- Will be populated by JavaScript -->
-        </div>
-      </div>
-    </div>
-
-    <div id="muted" class="tab-content">
-      <div class="section">
-        <div class="section-title">Muted Users</div>
-        <div id="muted-users-list">
-          <!-- Will be populated by JavaScript -->
-        </div>
-      </div>
-    </div>
-
-    <div id="stats" class="tab-content">
-      <div class="section">
-        <div class="section-title">Action Statistics</div>
-        <div class="stats">
-          <div class="stat-card">
-            <div class="stat-number" id="total-blocks">0</div>
-            <div class="stat-label">Total Blocks</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="total-mutes">0</div>
-            <div class="stat-label">Total Mutes</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="backup" class="tab-content">
-      <div class="section">
-        <div class="section-title">Backup & Restore</div>
-        <div class="option-group">
-          <div class="section-subtitle">Select what to export/import/clear:</div>
-          <div class="export-options">
-            <div class="option">
-              <input type="checkbox" id="export-blocks" name="export-options" value="blocks" checked>
-              <label for="export-blocks">Blocked Users</label>
+        <div class="nav-foot-tools">
+          <button type="button" class="acct" id="sidebar-account" disabled>
+            <div class="avatar sm" id="sidebar-avatar">?</div>
+            <div class="acct-meta">
+              <div class="acct-name" id="sidebar-handle">@—</div>
+              <div class="acct-role">Active workspace</div>
             </div>
-            <div class="option">
-              <input type="checkbox" id="export-mutes" name="export-options" value="mutes" checked>
-              <label for="export-mutes">Muted Users</label>
+          </button>
+          <button type="button" class="btn-icon" id="storage-debug-open" title="View extension storage" aria-label="View extension storage"></button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <div class="mobile-bar">
+        <button type="button" class="btn-icon" id="sidebar-open" aria-label="Open menu"></button>
+        <div class="brand-mark brand-mark-sm" id="mobile-brand-icon">
+          <img src="images/one-click-blocker.png" alt="" width="28" height="28" decoding="async">
+        </div>
+        <b>1-click blocker</b>
+      </div>
+
+      <div class="main-scroll">
+        <!-- To Block -->
+        <div id="queue" class="page tab-panel active fade-in">
+          <div class="queue-sticky-head">
+            <div class="page-head">
+              <div class="page-eyebrow">Work queue</div>
+              <h1 class="page-title">To Block</h1>
+              <p class="page-sub">Add accounts to a queue, then block or mute them automatically. Import a JSON backup or CSV. The extension opens each profile in the background and processes the list one account at a time.</p>
             </div>
-            <div class="option">
-              <input type="checkbox" id="export-settings" name="export-options" value="settings" checked>
-              <label for="export-settings">Settings</label>
+            <div id="queue-empty">
+              <input type="file" id="queue-import-file" accept=".json,.csv,application/json,text/csv" hidden>
+              <div class="dropzone" id="queue-dropzone">
+                <div class="dz-ico"><span data-drop-icon="upload"></span></div>
+                <div class="empty-title">Import a list to get started</div>
+                <div class="empty-sub" style="margin:7px auto 0">Drop a <span class="mono">.json</span> backup export or a <span class="mono">.csv</span> of handles. Duplicates are removed. Accounts you have already blocked are skipped.</div>
+                <div class="mt18"><button type="button" class="btn btn-primary" id="queue-choose-file"><span data-btn-icon="upload"></span>Choose file</button></div>
+              </div>
+            </div>
+            <div id="queue-content" hidden>
+              <input type="file" id="queue-import-file-inline" accept=".json,.csv,application/json,text/csv" hidden>
+              <div id="queue-launch" class="launch"></div>
+              <div id="queue-hero" class="hero" hidden></div>
+              <div id="queue-toolbar" class="list-toolbar"></div>
+              <div id="queue-select-all" class="row-gap" style="padding:2px 14px 12px;color:var(--text-2);font-size:13px" hidden></div>
             </div>
           </div>
-          <div class="button-group">
-            <button class="button" id="export-data">Export Data</button>
-            <button class="button" id="import-data">Import Data</button>
-            <button class="button danger" id="clear-data">Clear Data (Reset to Default)</button>
+          <div id="queue-list-section" hidden>
+            <div id="queue-users-list"></div>
+            <div id="queue-bulkbar" class="bulkbar" hidden></div>
+          </div>
+        </div>
+
+        <!-- Settings -->
+        <div id="settings" class="page tab-panel fade-in">
+          <div class="page-head">
+            <div class="page-eyebrow">Configuration</div>
+            <h1 class="page-title">Settings</h1>
+          </div>
+
+          <div class="section">
+            <div class="section-head bordered">
+              <h3 class="section-title"><span data-section-icon="user"></span>Your Twitter account</h3>
+              <p class="section-desc">Block and mute lists are stored per handle. Auto-detected when you visit Twitter — reassign if it's wrong.</p>
+            </div>
+            <div class="section-body">
+              <div class="spread" style="gap:14px;flex-wrap:wrap">
+                <div class="input-prefix" style="flex:1;min-width:240px">
+                  <span class="pfx">@</span>
+                  <input type="text" id="active-account-input" class="input" autocomplete="off" spellcheck="false" placeholder="your_handle">
+                </div>
+                <button type="button" class="btn btn-primary" id="save-account-handle"><span data-btn-icon="check"></span>Save handle</button>
+              </div>
+              <div class="row-gap mt14" style="font-size:13px;color:var(--text-2)">
+                <span>Currently managing lists for <b style="color:var(--text)" id="account-display-handle">@—</b></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <h3 class="section-title"><span data-section-icon="sliders"></span>Default action</h3>
+              <p class="section-desc">What a single click does on the injected button.</p>
+            </div>
+            <div class="section-body">
+              <div class="seg lg" id="action-seg" role="group" aria-label="Default action">
+                <button type="button" data-value="block" class="on accent"><span data-seg-icon="block"></span>Block</button>
+                <button type="button" data-value="mute"><span data-seg-icon="mute"></span>Mute</button>
+              </div>
+              <div class="field-help mt8" id="action-help">One click blocks the account immediately.</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <h3 class="section-title"><span data-section-icon="eye"></span>Interface</h3>
+              <p class="section-desc">Small conveniences on Twitter itself.</p>
+            </div>
+            <div class="section-body">
+              <div class="field-row" style="padding-top:0">
+                <div>
+                  <div class="field-label">Show settings shortcut on Twitter</div>
+                  <div class="field-help">Adds a small icon to Twitter pages that opens this control center in a new tab.</div>
+                </div>
+                <button type="button" class="switch on" id="show-settings-icon" aria-pressed="true"></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <div class="spread">
+                <div>
+                  <h3 class="section-title" id="page-count-title"><span data-section-icon="compass"></span>Show button on <span class="muted tnum" id="page-enabled-count">· 0/12</span></h3>
+                  <p class="section-desc">Pick the Twitter surfaces where the one-click button appears. Saves instantly.</p>
+                </div>
+                <button type="button" class="btn btn-sm btn-quiet" id="toggle-all-pages">Enable all</button>
+              </div>
+            </div>
+            <div class="section-body">
+              <div class="chip-grid" id="page-chips"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Blocked -->
+        <div id="blocked" class="page tab-panel fade-in">
+          <div class="page-head">
+            <div class="page-eyebrow">Completed ledger</div>
+            <h1 class="page-title">Blocked <span class="muted tnum" id="blocked-title-count" style="font-size:20px;font-weight:500">0</span></h1>
+            <p class="page-sub">Accounts this extension has blocked on <b id="blocked-account-label">@—</b>.</p>
+          </div>
+          <div id="blocked-toolbar" class="list-toolbar" hidden>
+            <div class="search">
+              <span data-search-icon="search"></span>
+              <input type="search" class="input" id="blocked-search" placeholder="Search handles…" autocomplete="off">
+            </div>
+            <div class="filter-chips" id="blocked-sort">
+              <button type="button" class="on" data-sort="recent">Recent</button>
+              <button type="button" data-sort="az">A–Z</button>
+            </div>
+          </div>
+          <div id="blocked-users-list"></div>
+        </div>
+
+        <!-- Muted -->
+        <div id="muted" class="page tab-panel fade-in">
+          <div class="page-head">
+            <div class="page-eyebrow">Completed ledger</div>
+            <h1 class="page-title">Muted <span class="muted tnum" id="muted-title-count" style="font-size:20px;font-weight:500">0</span></h1>
+            <p class="page-sub">Accounts this extension has muted on <b id="muted-account-label">@—</b>.</p>
+          </div>
+          <div id="muted-toolbar" class="list-toolbar" hidden>
+            <div class="search">
+              <span data-search-icon="search"></span>
+              <input type="search" class="input" id="muted-search" placeholder="Search handles…" autocomplete="off">
+            </div>
+            <div class="filter-chips" id="muted-sort">
+              <button type="button" class="on" data-sort="recent">Recent</button>
+              <button type="button" data-sort="az">A–Z</button>
+            </div>
+          </div>
+          <div id="muted-users-list"></div>
+        </div>
+
+        <!-- Statistics -->
+        <div id="stats" class="page tab-panel fade-in">
+          <div class="page-head">
+            <div class="page-eyebrow">Insights</div>
+            <h1 class="page-title">Statistics</h1>
+            <p class="page-sub">Actions completed through the extension. Counts increment when a block or mute succeeds — they don't pull from Twitter's API.</p>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="ico" style="background:var(--accent-soft);color:var(--accent)"><span data-stat-icon="block"></span></div>
+              <div class="big tnum" id="total-blocks">0</div>
+              <div class="cap"><span>Total blocks</span> <span class="trend"><span data-trend-icon="trend"></span> all time</span></div>
+            </div>
+            <div class="stat-card">
+              <div class="ico" style="background:var(--warn-soft);color:var(--warn)"><span data-stat-icon="mute"></span></div>
+              <div class="big tnum" id="total-mutes">0</div>
+              <div class="cap"><span>Total mutes</span> <span class="trend"><span data-trend-icon="trend"></span> all time</span></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <h3 class="section-title"><span data-section-icon="queue"></span>Queue runs</h3>
+              <p class="section-desc">History of queue runs from the To Block tab, with start time, end time, and outcome counts.</p>
+            </div>
+            <div class="section-body" style="padding-top:0" id="queue-run-history"></div>
+          </div>
+        </div>
+
+        <!-- Backup -->
+        <div id="backup" class="page tab-panel fade-in">
+          <div class="page-head">
+            <div class="page-eyebrow">Safety &amp; migration</div>
+            <h1 class="page-title">Backup &amp; Restore</h1>
+            <p class="page-sub">Export your data as JSON, restore it on another machine, or reset. Pick which categories each action applies to.</p>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <h3 class="section-title"><span data-section-icon="sliders"></span>Choose categories</h3>
+              <p class="section-desc">Shared selection for export, import and reset below.</p>
+            </div>
+            <div class="section-body" style="padding-top:0">
+              <div class="rows" id="backup-scopes">
+                <button type="button" class="row sel" data-scope="blocks">
+                  <span class="check on" data-check></span>
+                  <span class="chip-ico" style="background:var(--accent);color:#fff"><span data-scope-icon="block"></span></span>
+                  <span class="row-stack">
+                    <span style="font-weight:600;font-size:14.5px">Blocked users</span>
+                    <span class="row-sub" id="backup-desc-blocks">0 accounts</span>
+                  </span>
+                </button>
+                <button type="button" class="row sel" data-scope="mutes">
+                  <span class="check on" data-check></span>
+                  <span class="chip-ico" style="background:var(--accent);color:#fff"><span data-scope-icon="mute"></span></span>
+                  <span class="row-stack">
+                    <span style="font-weight:600;font-size:14.5px">Muted users</span>
+                    <span class="row-sub" id="backup-desc-mutes">0 accounts</span>
+                  </span>
+                </button>
+                <button type="button" class="row sel" data-scope="settings">
+                  <span class="check on" data-check></span>
+                  <span class="chip-ico" style="background:var(--accent);color:#fff"><span data-scope-icon="gear"></span></span>
+                  <span class="row-stack">
+                    <span style="font-weight:600;font-size:14.5px">Settings &amp; preferences</span>
+                    <span class="row-sub">Default action, enabled pages, handle</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-body" style="display:flex;gap:11px;flex-wrap:wrap;align-items:center">
+              <button type="button" class="btn btn-primary" id="export-data"><span data-btn-icon="download"></span>Export data</button>
+              <button type="button" class="btn btn-ghost" id="import-data"><span data-btn-icon="upload"></span>Import data</button>
+              <span style="flex:1"></span>
+              <button type="button" class="btn btn-danger-soft" id="clear-data"><span data-btn-icon="trash"></span>Reset selected</button>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <div class="scrim hidden" id="clear-confirm-scrim" role="dialog" aria-modal="true" aria-labelledby="clear-modal-title">
+    <div class="modal">
+      <div class="modal-body">
+        <div class="modal-ico" style="background:var(--danger-soft);color:var(--danger)"><span data-modal-icon="trash"></span></div>
+        <div class="modal-title" id="clear-modal-title">Reset selected data?</div>
+        <div class="modal-text" id="clear-modal-text">This permanently clears the selected categories on this device. Export a backup first if you're not sure.</div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="clear-cancel">Keep it</button>
+        <button type="button" class="btn btn-danger" id="clear-confirm">Reset data</button>
+      </div>
+    </div>
   </div>
 
-  <div class="save-notice">Settings saved!</div>
+  <div class="scrim hidden" id="storage-debug-overlay" role="dialog" aria-labelledby="storage-debug-title" aria-modal="true">
+    <div class="storage-debug-panel">
+      <div class="storage-debug-header">
+        <h2 id="storage-debug-title">Extension storage</h2>
+        <button type="button" class="storage-debug-close" id="storage-debug-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="storage-debug-body" id="storage-debug-body"></div>
+    </div>
+  </div>
+
+  <input type="file" id="import-file" accept="application/json" hidden>
+
+  <div class="scrim hidden" id="clear-queue-scrim" role="dialog" aria-modal="true" aria-labelledby="clear-queue-modal-title">
+    <div class="modal">
+      <div class="modal-body">
+        <div class="modal-ico" style="background:var(--danger-soft);color:var(--danger)"><span data-modal-icon="trash"></span></div>
+        <div class="modal-title" id="clear-queue-modal-title">Clear the entire to-block queue?</div>
+        <div class="modal-text">This removes all queued accounts and their not-found tags. It does not undo anything already blocked or muted.</div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="clear-queue-cancel">Keep queue</button>
+        <button type="button" class="btn btn-danger" id="clear-queue-confirm">Clear queue</button>
+      </div>
+    </div>
+  </div>
 
   <script src="account-data.js"></script>
+  <script src="options-icons.js"></script>
   <script src="options.js"></script>
 </body>
-</html> 
+</html>
