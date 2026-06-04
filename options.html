@@ -93,13 +93,25 @@
               <h1 class="page-title">To Block</h1>
               <p class="page-sub">Add accounts to a queue, then block or mute them automatically. Import a JSON backup or CSV. The extension opens each profile in the background and processes the list one account at a time.</p>
             </div>
+            <div id="queue-staged-section" class="queue-staged-section" hidden>
+              <div class="queue-staged-head">
+                <h3 class="queue-staged-title">Saved queues</h3>
+                <p class="queue-staged-desc muted">Each paste or import is saved here. <b>Set as active queue</b> loads that queue below and puts your current active queue back in this list so you can switch again.</p>
+              </div>
+              <div id="queue-staged-list" class="queue-staged-list"></div>
+              <div class="queue-staged-actions">
+                <button type="button" class="btn btn-sm btn-primary" id="queue-staged-add-btn"><span data-btn-icon="plus"></span>Add</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="queue-staged-merge" disabled>Merge into active queue</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="queue-staged-select-all">Select all</button>
+              </div>
+            </div>
             <div id="queue-empty">
               <input type="file" id="queue-import-file" accept=".json,.csv,application/json,text/csv" hidden>
               <div class="dropzone" id="queue-dropzone">
                 <div class="dz-ico"><span data-drop-icon="upload"></span></div>
                 <div class="empty-title">Import a list to get started</div>
-                <div class="empty-sub" style="margin:7px auto 0">Drop a <span class="mono">.json</span> backup export or a <span class="mono">.csv</span> of handles. Duplicates are removed. Accounts you have already blocked are skipped.</div>
-                <div class="mt18"><button type="button" class="btn btn-primary" id="queue-choose-file"><span data-btn-icon="upload"></span>Choose file</button></div>
+                <div class="empty-sub" style="margin:7px auto 0">Use <b>Add</b> to import a file or paste handles and profile links. Each batch becomes a staged queue you can merge into the active queue.</div>
+                <div class="mt18"><button type="button" class="btn btn-primary" id="queue-empty-add-btn"><span data-btn-icon="plus"></span>Add</button></div>
               </div>
             </div>
             <div id="queue-content" hidden>
@@ -107,6 +119,7 @@
               <div id="queue-launch" class="launch"></div>
               <div id="queue-hero" class="hero" hidden></div>
               <div id="queue-toolbar" class="list-toolbar"></div>
+              <div id="queue-active-label" class="queue-active-label" hidden>Active queue</div>
               <div id="queue-select-all" class="row-gap" style="padding:2px 14px 12px;color:var(--text-2);font-size:13px" hidden></div>
             </div>
           </div>
@@ -340,6 +353,50 @@
   </div>
 
   <input type="file" id="import-file" accept="application/json" hidden>
+
+  <div class="scrim hidden" id="queue-add-scrim" role="dialog" aria-modal="true" aria-labelledby="queue-add-title">
+    <div class="modal queue-add-modal">
+      <div id="queue-add-menu">
+        <div class="modal-body">
+          <div class="modal-title" id="queue-add-title">Add to queue</div>
+          <div class="modal-text">Import a file or paste handles and X profile links. Each batch is saved as its own staged queue.</div>
+        </div>
+        <div class="queue-add-options">
+          <button type="button" class="queue-add-option" id="queue-add-choose-paste">
+            <span class="chip-ico" data-add-opt-icon="ext"></span>
+            <span class="row-stack">
+              <span style="font-weight:600;font-size:14.5px">Paste handles or links</span>
+              <span class="row-sub">@handle or https://x.com/handle — Enter after each</span>
+            </span>
+          </button>
+          <button type="button" class="queue-add-option" id="queue-add-choose-import">
+            <span class="chip-ico" data-add-opt-icon="upload"></span>
+            <span class="row-stack">
+              <span style="font-weight:600;font-size:14.5px">Import file</span>
+              <span class="row-sub"><span class="mono">.json</span> backup export or <span class="mono">.csv</span> of handles</span>
+            </span>
+          </button>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-ghost" id="queue-add-cancel">Cancel</button>
+        </div>
+      </div>
+      <div id="queue-add-paste" hidden>
+        <div class="modal-body">
+          <button type="button" class="btn btn-quiet btn-sm" id="queue-add-paste-back" style="margin-bottom:12px;padding-left:0">← Back</button>
+          <div class="modal-title">Paste handles</div>
+          <div class="modal-text">Press Enter after each handle or link. Paste multiple lines at once.</div>
+          <div id="queue-paste-tags" class="queue-paste-tags"></div>
+          <input type="text" id="queue-paste-input" class="input queue-paste-input" placeholder="CaptainArinze or https://x.com/CaptainArinze" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="modal-foot queue-paste-foot">
+          <button type="button" class="btn btn-ghost" id="queue-paste-clear-draft">Clear</button>
+          <button type="button" class="btn btn-ghost" id="queue-paste-add-active">Add to active queue</button>
+          <button type="button" class="btn btn-primary" id="queue-paste-save-staged"><span data-btn-icon="queue"></span>Save as new queue</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="scrim hidden" id="clear-queue-scrim" role="dialog" aria-modal="true" aria-labelledby="clear-queue-modal-title">
     <div class="modal">

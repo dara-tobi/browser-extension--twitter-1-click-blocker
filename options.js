@@ -70,6 +70,11 @@ const UI_COPY = {
     bulkSelected(actionLabel) {
       return `${actionLabel} selected`;
     },
+    stagedSwitchTo: 'Set as active queue',
+    stagedMergeIntoActive: 'Merge into active queue',
+    stagedSwitchedToast(label, total) {
+      return `Switched to <b>${label}</b> · <b>${total}</b> accounts in active queue`;
+    },
     progressMeta(processed, total, pct, etaSec) {
       return `${processed} / ${total} processed · ${pct}% · about ${etaSec} s remaining`;
     }
@@ -109,6 +114,12 @@ class OptionsManager {
     this._suppressStorageRefresh = false;
     this._loadSettingsPromise = null;
     this._catchUpTimer = null;
+    this._pasteDraft = [];
+    this._showNotFound = true;
+    this._stagedQueues = [];
+    this._stagedSelected = new Set();
+    this._activeQueueId = null;
+    this._activeQueueLabel = null;
     this.backupScope = { blocks: true, mutes: true, settings: true };
     this.injectStaticIcons();
     this.initTheme();
@@ -551,15 +562,21 @@ class OptionsManager {
 
   getQueueCounts() {
     const users = this._queueUsers || [];
+    const visible = this._showNotFound
+      ? users
+      : users.filter((u) => !this.isQueueNotFound(u));
     return {
-      all: users.length,
-      pending: users.filter((u) => !this.isQueueNotFound(u)).length,
+      all: visible.length,
+      pending: visible.filter((u) => !this.isQueueNotFound(u)).length,
       notfound: users.filter((u) => this.isQueueNotFound(u)).length
     };
   }
 
   getShownQueueUsers() {
     let shown = [...(this._queueUsers || [])];
+    if (!this._showNotFound) {
+      shown = shown.filter((u) => !this.isQueueNotFound(u));
+    }
     if (this._queueFilter === 'pending') {
       shown = shown.filter((u) => !this.isQueueNotFound(u));
     } else if (this._queueFilter === 'notfound') {
@@ -645,12 +662,490 @@ class OptionsManager {
     const empty = document.getElementById('queue-empty');
     const content = document.getElementById('queue-content');
     const listSection = document.getElementById('queue-list-section');
+    const activeLabel = document.getElementById('queue-active-label');
+    const stagedSection = document.getElementById('queue-staged-section');
+
+    this._showNotFound = settings.toBlockShowNotFound !== false;
+    this._stagedQueues = settings.toBlockStagedQueues || [];
+    this._activeQueueId = settings.toBlockActiveQueueId || null;
+    this._activeQueueLabel = settings.toBlockActiveQueueLabel || null;
+
     const hasQueue = (settings.toBlockUsers || []).length > 0;
-    if (empty) empty.hidden = hasQueue;
+    const hasStaged = this._stagedQueues.length > 0;
+    const hasDraft = this._pasteDraft.length > 0;
+
+    if (empty) empty.hidden = hasQueue || hasStaged || hasDraft;
     if (content) content.hidden = !hasQueue;
     if (listSection) listSection.hidden = !hasQueue;
-    if (!hasQueue) return;
-    void this.refreshQueueRunState();
+    if (activeLabel) activeLabel.hidden = !hasQueue;
+    if (stagedSection) stagedSection.hidden = !hasStaged;
+
+    this.renderQueueStagedSection();
+    this.renderQueueActiveLabel();
+
+    if (hasQueue) void this.refreshQueueRunState();
+  }
+
+  renderQueueActiveLabel() {
+    const el = document.getElementById('queue-active-label');
+    if (!el) return;
+    const n = this._queueUsers?.length || 0;
+    if (!n) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    const name = this._activeQueueLabel || 'Active queue';
+    el.textContent = `${name} · ${n} account${n === 1 ? '' : 's'}`;
+  }
+
+  updateQueueEmptyVisibility() {
+    const empty = document.getElementById('queue-empty');
+    if (!empty) return;
+    const hasQueue = (this._queueUsers || []).length > 0;
+    const hasStaged = (this._stagedQueues || []).length > 0;
+    const hasDraft = this._pasteDraft.length > 0;
+    empty.hidden = hasQueue || hasStaged || hasDraft;
+  }
+
+  parseHandlesFromText(text) {
+    const parts = String(text || '').split(/[\s,;]+/).filter(Boolean);
+    const seen = new Set();
+    const out = [];
+    for (const part of parts) {
+      const username = this.normalizeUsername(part);
+      if (!username) continue;
+      const key = username.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(username);
+    }
+    return out;
+  }
+
+  addPasteDraftHandles(handles) {
+    const seen = new Set(this._pasteDraft.map((h) => h.toLowerCase()));
+    let added = 0;
+    for (const raw of handles) {
+      const username = this.normalizeUsername(raw);
+      if (!username) continue;
+      const key = username.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      this._pasteDraft.push(username);
+      added++;
+    }
+    if (added) {
+      this.renderQueuePastePanel();
+      this.updateQueueEmptyVisibility();
+      const stagedSection = document.getElementById('queue-staged-section');
+      if (stagedSection && this._stagedQueues.length) stagedSection.hidden = false;
+    }
+    return added;
+  }
+
+  removePasteDraftHandle(handle) {
+    const key = (AccountData.listUsernameKey(handle) || handle).toLowerCase();
+    this._pasteDraft = this._pasteDraft.filter(
+      (h) => (AccountData.listUsernameKey(h) || h).toLowerCase() !== key
+    );
+    this.renderQueuePastePanel();
+    this.updateQueueEmptyVisibility();
+  }
+
+  collectPasteHandles() {
+    const input = document.getElementById('queue-paste-input');
+    const pending = input?.value?.trim() ? this.parseHandlesFromText(input.value) : [];
+    return AccountData.mergeUsernameLists(this._pasteDraft, pending);
+  }
+
+  clearPasteDraftUI() {
+    this._pasteDraft = [];
+    const input = document.getElementById('queue-paste-input');
+    if (input) input.value = '';
+    this.renderQueuePastePanel();
+    this.updateQueueEmptyVisibility();
+  }
+
+  renderQueuePastePanel() {
+    const tagsEl = document.getElementById('queue-paste-tags');
+    if (!tagsEl) return;
+    tagsEl.innerHTML = this._pasteDraft
+      .map(
+        (handle) =>
+          `<span class="queue-paste-tag">@${this.escapeHtml(handle)}<button type="button" data-remove-paste="${this.escapeHtml(handle)}" aria-label="Remove">×</button></span>`
+      )
+      .join('');
+    tagsEl.querySelectorAll('[data-remove-paste]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.removePasteDraftHandle(btn.getAttribute('data-remove-paste'));
+      });
+    });
+  }
+
+  async createStagedQueue(users, label) {
+    if (!this.currentHandle) return null;
+    const merged = AccountData.mergeUsernameLists(users);
+    if (!merged.length) return null;
+    let settings = await this.readStoredSettings(this.currentHandle);
+    const account = AccountData.getAccount(settings, settings.activeAccount);
+    const entryId = String(Date.now());
+    const entryLabel = label || `Queue ${(account.toBlockStagedQueues || []).length + 1}`;
+    const entry = {
+      id: entryId,
+      label: entryLabel,
+      createdAt: new Date().toISOString(),
+      users: merged
+    };
+
+    if (!(account.toBlockUsers || []).length) {
+      const queueAction = account.bulkQueueAction || 'block';
+      const eligible = AccountData.filterUsernamesForToBlockQueue(merged, account.stats, queueAction);
+      if (!eligible.length) return null;
+      entry.users = eligible;
+      const staged = (account.toBlockStagedQueues || []).filter((q) => q.id !== entryId);
+      settings = AccountData.updateActiveAccountLists(settings, {
+        toBlockUsers: eligible,
+        toBlockStagedQueues: staged,
+        toBlockActiveQueueId: entryId,
+        toBlockActiveQueueLabel: entryLabel
+      });
+      await this.persistSettings(settings);
+      this._queueUsers = eligible;
+      this._activeQueueId = entryId;
+      this._activeQueueLabel = entryLabel;
+      this._stagedQueues = staged;
+      this.renderQueueStagedSection();
+      const stagedSection = document.getElementById('queue-staged-section');
+      if (stagedSection) stagedSection.hidden = !staged.length;
+      this.updateQueueEmptyVisibility();
+      return { ...entry, activated: true };
+    }
+
+    const staged = [...(account.toBlockStagedQueues || [])];
+    staged.push(entry);
+    settings = AccountData.updateActiveAccountLists(settings, { toBlockStagedQueues: staged });
+    await this.persistSettings(settings);
+    this._stagedQueues = staged;
+    this.renderQueueStagedSection();
+    const stagedSection = document.getElementById('queue-staged-section');
+    if (stagedSection) stagedSection.hidden = false;
+    this.updateQueueEmptyVisibility();
+    return entry;
+  }
+
+  async deleteStagedQueue(id) {
+    if (!this.currentHandle || !id) return;
+    const settings = await this.readStoredSettings(this.currentHandle);
+    const accountKey = settings.activeAccount;
+    const account = AccountData.getAccount(settings, accountKey);
+    const staged = (account.toBlockStagedQueues || []).filter((q) => q.id !== id);
+    await AccountData.patchLocalAccountList(accountKey, { toBlockStagedQueues: staged });
+    this._stagedQueues = staged;
+    this._stagedSelected.delete(id);
+    this.renderQueueStagedSection();
+    this.updateQueueEmptyVisibility();
+    const stagedSection = document.getElementById('queue-staged-section');
+    if (stagedSection) stagedSection.hidden = !staged.filter((q) => q.id !== this._activeQueueId).length;
+  }
+
+  renderQueueStagedSection() {
+    const list = document.getElementById('queue-staged-list');
+    const mergeBtn = document.getElementById('queue-staged-merge');
+    if (!list) return;
+    const activeId = this._activeQueueId;
+    const staged = (this._stagedQueues || []).filter((q) => q.id !== activeId);
+    if (!staged.length) {
+      list.innerHTML = '';
+      if (mergeBtn) mergeBtn.disabled = true;
+      return;
+    }
+    list.innerHTML = staged
+      .map((q) => {
+        const sel = this._stagedSelected.has(q.id);
+        const when = this.formatQueueRunDateTime(q.createdAt);
+        return `<div class="queue-staged-card${sel ? ' sel' : ''}" data-staged-id="${this.escapeHtml(q.id)}">
+          ${this.checkButtonHtml(sel, false)}
+          <div class="queue-staged-card-main">
+            <div class="queue-staged-card-title">${this.escapeHtml(q.label)}</div>
+            <div class="queue-staged-card-meta tnum">${q.users?.length || 0} accounts · ${this.escapeHtml(when)}</div>
+          </div>
+          <div class="queue-staged-card-actions">
+            <button type="button" class="btn btn-sm btn-primary queue-staged-use-active" data-use-staged="${this.escapeHtml(q.id)}">${UI_COPY.queue.stagedSwitchTo}</button>
+            <button type="button" class="btn-icon queue-staged-delete" data-delete-staged="${this.escapeHtml(q.id)}" title="Delete staged queue">${icon('x', 16)}</button>
+          </div>
+        </div>`;
+      })
+      .join('');
+    const selectedCount = staged.filter((q) => this._stagedSelected.has(q.id)).length;
+    if (mergeBtn) {
+      mergeBtn.disabled = selectedCount === 0;
+      mergeBtn.textContent = UI_COPY.queue.stagedMergeIntoActive;
+    }
+
+    list.querySelectorAll('.queue-staged-card').forEach((card) => {
+      const id = card.dataset.stagedId;
+      card.addEventListener('click', (e) => {
+        if (
+          e.target.closest('.queue-staged-delete') ||
+          e.target.closest('.queue-staged-use-active') ||
+          e.target.closest('[data-check-btn]')
+        )
+          return;
+        if (this._stagedSelected.has(id)) this._stagedSelected.delete(id);
+        else this._stagedSelected.add(id);
+        this.renderQueueStagedSection();
+      });
+      card.querySelector('[data-check-btn]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this._stagedSelected.has(id)) this._stagedSelected.delete(id);
+        else this._stagedSelected.add(id);
+        this.renderQueueStagedSection();
+      });
+    });
+    list.querySelectorAll('[data-delete-staged]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const delId = btn.getAttribute('data-delete-staged');
+        if (delId) void this.deleteStagedQueue(delId);
+      });
+    });
+    list.querySelectorAll('[data-use-staged]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const useId = btn.getAttribute('data-use-staged');
+        if (useId) void this.useStagedQueueAsActive(useId);
+      });
+    });
+  }
+
+  buildQueueSwitchUpdate(account, targetId) {
+    const staged = [...(account.toBlockStagedQueues || [])];
+    const target = staged.find((q) => q.id === targetId);
+    if (!target) return null;
+    const queueAction = account.bulkQueueAction || 'block';
+    const activeUsers = AccountData.filterToBlockQueue(
+      account.toBlockUsers || [],
+      account.stats,
+      queueAction
+    );
+    let nextStaged = staged.filter((q) => q.id !== targetId);
+    if (activeUsers.length) {
+      const stashId = account.toBlockActiveQueueId || String(Date.now());
+      const stashLabel =
+        account.toBlockActiveQueueLabel ||
+        staged.find((q) => q.id === stashId)?.label ||
+        `Queue ${nextStaged.length + 1}`;
+      const stashEntry = {
+        id: stashId,
+        label: stashLabel,
+        createdAt: staged.find((q) => q.id === stashId)?.createdAt || new Date().toISOString(),
+        users: activeUsers
+      };
+      const idx = nextStaged.findIndex((q) => q.id === stashId);
+      if (idx >= 0) nextStaged[idx] = stashEntry;
+      else nextStaged.push(stashEntry);
+    }
+    const nextUsers = AccountData.filterUsernamesForToBlockQueue(
+      AccountData.mergeUsernameLists(target.users || []),
+      account.stats,
+      queueAction
+    );
+    if (!nextUsers.length) return null;
+    return {
+      toBlockUsers: nextUsers,
+      toBlockStagedQueues: nextStaged,
+      toBlockActiveQueueId: target.id,
+      toBlockActiveQueueLabel: target.label
+    };
+  }
+
+  async useStagedQueueAsActive(id) {
+    if (!this.currentHandle || !id) return;
+    const queue = (this._stagedQueues || []).find((q) => q.id === id);
+    if (!queue) return;
+    let settings = await this.readStoredSettings(this.currentHandle);
+    const account = AccountData.getAccount(settings, settings.activeAccount);
+    const listsUpdate = this.buildQueueSwitchUpdate(account, id);
+    if (!listsUpdate) {
+      this.toast('That queue has no accounts to switch to.', { kind: 'warn' });
+      return;
+    }
+    settings = AccountData.updateActiveAccountLists(settings, listsUpdate);
+    await this.persistSettings(settings);
+    this._stagedSelected.delete(id);
+    this.toast(UI_COPY.queue.stagedSwitchedToast(this.escapeHtml(queue.label), listsUpdate.toBlockUsers.length), {
+      kind: 'success'
+    });
+    await this.refreshUIFromStorage();
+  }
+
+  async mergeSelectedStagedQueues() {
+    if (!this.currentHandle || !this._stagedSelected.size) return;
+    const selected = (this._stagedQueues || []).filter((q) => this._stagedSelected.has(q.id));
+    const handles = AccountData.mergeUsernameLists(...selected.map((q) => q.users || []));
+    if (!handles.length) return;
+    const { added, total } = await this.setToBlockUsers(handles, true);
+    let settings = await this.readStoredSettings(this.currentHandle);
+    const remaining = (AccountData.getAccount(settings, settings.activeAccount).toBlockStagedQueues || [])
+      .filter((q) => !this._stagedSelected.has(q.id));
+    settings = AccountData.updateActiveAccountLists(settings, { toBlockStagedQueues: remaining });
+    await this.persistSettings(settings);
+    this._stagedQueues = remaining;
+    this._stagedSelected.clear();
+    this.toast(
+      added
+        ? `Merged <b>${added}</b> accounts · <b>${total}</b> in active queue`
+        : `No new accounts · <b>${total}</b> in active queue`,
+      { kind: 'success' }
+    );
+    await this.refreshUIFromStorage();
+  }
+
+  async setShowNotFoundInQueue(show) {
+    if (!this.currentHandle) return;
+    this._showNotFound = !!show;
+    let settings = await this.readStoredSettings(this.currentHandle);
+    settings = AccountData.updateActiveAccountLists(settings, { toBlockShowNotFound: this._showNotFound });
+    await this.persistSettings(settings);
+    if (this._queueFilter === 'notfound' && !this._showNotFound) {
+      this._queueFilter = 'all';
+    }
+    this.renderQueueToolbar();
+    this.renderQueueList();
+    this.renderQueueSelectAll();
+  }
+
+  openQueueAddModal() {
+    document.getElementById('queue-add-scrim')?.classList.remove('hidden');
+    this.showQueueAddMenu();
+  }
+
+  closeQueueAddModal() {
+    document.getElementById('queue-add-scrim')?.classList.add('hidden');
+    this.showQueueAddMenu();
+  }
+
+  showQueueAddMenu() {
+    const menu = document.getElementById('queue-add-menu');
+    const paste = document.getElementById('queue-add-paste');
+    if (menu) menu.hidden = false;
+    if (paste) paste.hidden = true;
+  }
+
+  showQueueAddPaste() {
+    const menu = document.getElementById('queue-add-menu');
+    const paste = document.getElementById('queue-add-paste');
+    if (menu) menu.hidden = true;
+    if (paste) paste.hidden = false;
+    this.renderQueuePastePanel();
+    document.getElementById('queue-paste-input')?.focus();
+  }
+
+  initQueueAddUI() {
+    if (document.body.dataset.queueAddBound) return;
+    document.body.dataset.queueAddBound = '1';
+
+    document.getElementById('queue-empty-add-btn')?.addEventListener('click', () => this.openQueueAddModal());
+    document.getElementById('queue-staged-add-btn')?.addEventListener('click', () => this.openQueueAddModal());
+    document.getElementById('queue-dropzone')?.addEventListener('click', () => this.openQueueAddModal());
+    document.getElementById('queue-add-cancel')?.addEventListener('click', () => this.closeQueueAddModal());
+    document.getElementById('queue-add-scrim')?.addEventListener('click', (e) => {
+      if (e.target.id === 'queue-add-scrim') this.closeQueueAddModal();
+    });
+    document.getElementById('queue-add-choose-paste')?.addEventListener('click', () => this.showQueueAddPaste());
+    document.getElementById('queue-add-choose-import')?.addEventListener('click', () => {
+      this.closeQueueAddModal();
+      this.importToBlockUsers();
+    });
+    document.getElementById('queue-add-paste-back')?.addEventListener('click', () => this.showQueueAddMenu());
+
+    document.querySelectorAll('[data-add-opt-icon]').forEach((el) => {
+      el.innerHTML = icon(el.dataset.addOptIcon, 18);
+    });
+
+    const input = document.getElementById('queue-paste-input');
+    if (!input) return;
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const raw = input.value.trim();
+      if (!raw) return;
+      const added = this.addPasteDraftHandles(this.parseHandlesFromText(raw));
+      if (!added) {
+        this.toast('Could not parse that handle.', { kind: 'warn' });
+      }
+      input.value = '';
+    });
+
+    input.addEventListener('paste', (e) => {
+      const text = e.clipboardData?.getData('text') || '';
+      const handles = this.parseHandlesFromText(text);
+      if (!handles.length) return;
+      e.preventDefault();
+      this.addPasteDraftHandles(handles);
+      input.value = '';
+    });
+
+    document.getElementById('queue-paste-save-staged')?.addEventListener('click', async () => {
+      const handles = this.collectPasteHandles();
+      if (!handles.length) {
+        this.toast('Add at least one handle first.', { kind: 'warn' });
+        return;
+      }
+      const entry = await this.createStagedQueue(handles, `Queue ${(this._stagedQueues?.length || 0) + 1}`);
+      if (entry) {
+        this.clearPasteDraftUI();
+        this.closeQueueAddModal();
+        await this.refreshUIFromStorage();
+        this.toast(
+          entry.activated
+            ? `Set <b>${entry.users.length}</b> accounts as active queue “${this.escapeHtml(entry.label)}”`
+            : `Saved <b>${entry.users.length}</b> accounts as “${this.escapeHtml(entry.label)}”`,
+          { kind: 'success' }
+        );
+      }
+    });
+
+    document.getElementById('queue-paste-add-active')?.addEventListener('click', async () => {
+      const handles = this.collectPasteHandles();
+      if (!handles.length) {
+        this.toast('Add at least one handle first.', { kind: 'warn' });
+        return;
+      }
+      const { added, total } = await this.setToBlockUsers(handles, true);
+      this.clearPasteDraftUI();
+      this.closeQueueAddModal();
+      await this.refreshUIFromStorage();
+      this.toast(
+        added
+          ? `Added <b>${added}</b> · <b>${total}</b> in active queue`
+          : `No new accounts · <b>${total}</b> in active queue`,
+        { kind: 'success' }
+      );
+    });
+
+    document.getElementById('queue-paste-clear-draft')?.addEventListener('click', () => {
+      this.clearPasteDraftUI();
+    });
+
+    document.getElementById('queue-staged-merge')?.addEventListener('click', () => {
+      void this.mergeSelectedStagedQueues();
+    });
+
+    document.getElementById('queue-staged-select-all')?.addEventListener('click', () => {
+      const staged = this._stagedQueues || [];
+      const allSel = staged.length && staged.every((q) => this._stagedSelected.has(q.id));
+      if (allSel) {
+        this._stagedSelected.clear();
+      } else {
+        staged.forEach((q) => this._stagedSelected.add(q.id));
+      }
+      this.renderQueueStagedSection();
+    });
   }
 
   renderQueueLaunch() {
@@ -674,11 +1169,12 @@ class OptionsManager {
           <button type="button" data-value="block" class="${this._queueAction === 'block' ? 'on accent' : ''}"><span data-seg-icon="block"></span>${UI_COPY.action.block.label}</button>
           <button type="button" data-value="mute" class="${this._queueAction === 'mute' ? 'on accent' : ''}"><span data-seg-icon="mute"></span>${UI_COPY.action.mute.label}</button>
         </div>
-        <button type="button" class="btn btn-ghost" id="queue-import-btn"><span data-btn-icon="upload"></span>Import</button>
+        <button type="button" class="btn btn-ghost" id="queue-add-btn"><span data-btn-icon="plus"></span>Add</button>
         <button type="button" class="btn btn-primary" id="queue-start-btn"><span data-btn-icon="play"></span>${UI_COPY.queue.startButton}</button>
       </div>`;
     el.querySelectorAll('[data-seg-icon]').forEach(n => { n.innerHTML = icon(n.dataset.segIcon, 15); });
     el.querySelectorAll('[data-btn-icon]').forEach(n => { n.innerHTML = icon(n.dataset.btnIcon, 17); });
+    el.querySelector('#queue-add-btn')?.addEventListener('click', () => this.openQueueAddModal());
     el.querySelector('#queue-action-seg')?.querySelectorAll('button').forEach(btn => {
       btn.addEventListener('click', () => {
         this._queueAction = btn.dataset.value;
@@ -687,7 +1183,6 @@ class OptionsManager {
         this.renderQueueList();
       });
     });
-    el.querySelector('#queue-import-btn')?.addEventListener('click', () => this.importToBlockUsers());
     el.querySelector('#queue-start-btn')?.addEventListener('click', () => this.startToBlockQueue());
   }
 
@@ -749,6 +1244,9 @@ class OptionsManager {
     const el = document.getElementById('queue-toolbar');
     if (!el) return;
     const counts = this.getQueueCounts();
+    const nfChip = this._showNotFound
+      ? `<button type="button" class="${this._queueFilter === 'notfound' ? 'on' : ''}" data-filter="notfound">Not found <span class="mini tnum">${counts.notfound}</span></button>`
+      : '';
     el.innerHTML = `
       <div class="search">
         <span data-search-icon="search"></span>
@@ -757,9 +1255,15 @@ class OptionsManager {
       <div class="filter-chips" id="queue-filter">
         <button type="button" class="${this._queueFilter === 'all' ? 'on' : ''}" data-filter="all">All <span class="mini tnum">${counts.all}</span></button>
         <button type="button" class="${this._queueFilter === 'pending' ? 'on' : ''}" data-filter="pending">Pending <span class="mini tnum">${counts.pending}</span></button>
-        <button type="button" class="${this._queueFilter === 'notfound' ? 'on' : ''}" data-filter="notfound">Not found <span class="mini tnum">${counts.notfound}</span></button>
+        ${nfChip}
       </div>
-      ${this._queueRunning ? '' : '<button type="button" class="btn btn-sm btn-danger-soft" id="queue-clear-btn"><span data-btn-icon="trash"></span>Clear queue</button>'}`;
+      <div class="queue-toolbar-extra">
+        <label class="queue-show-nf" id="queue-show-notfound-label">
+          <span>Show not found</span>
+          <span class="switch${this._showNotFound ? ' on' : ''}" id="queue-show-notfound-toggle" role="switch" aria-checked="${this._showNotFound}"></span>
+        </label>
+        ${this._queueRunning ? '' : '<button type="button" class="btn btn-sm btn-danger-soft" id="queue-clear-btn"><span data-btn-icon="trash"></span>Clear queue</button>'}
+      </div>`;
     el.querySelector('[data-search-icon]')?.insertAdjacentHTML('afterbegin', icon('search', 17));
     el.querySelector('#queue-clear-btn [data-btn-icon]')?.insertAdjacentHTML('afterbegin', icon('trash', 15));
     el.querySelector('#queue-search')?.addEventListener('input', (e) => {
@@ -778,6 +1282,19 @@ class OptionsManager {
       });
     });
     el.querySelector('#queue-clear-btn')?.addEventListener('click', () => this.openClearQueueConfirm());
+    const nfToggle = el.querySelector('#queue-show-notfound-toggle');
+    const nfLabel = el.querySelector('#queue-show-notfound-label');
+    const onNfToggle = () => {
+      void this.setShowNotFoundInQueue(!this._showNotFound);
+    };
+    nfToggle?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onNfToggle();
+    });
+    nfLabel?.addEventListener('click', (e) => {
+      if (e.target.closest('#queue-show-notfound-toggle')) return;
+      onNfToggle();
+    });
   }
 
   renderQueueSelectAll() {
@@ -1167,12 +1684,22 @@ class OptionsManager {
           this.toast('No usernames found in file.', { kind: 'warn' });
           return;
         }
-        const { added, total, skipped } = await this.setToBlockUsers(usernames, true);
-        let message = added
-          ? `Imported <b>${added}</b> · <b>${total}</b> in queue`
-          : `No new accounts · <b>${total}</b> already queued`;
-        if (skipped) message += ` · ${skipped} skipped`;
-        this.toast(message, { kind: 'success' });
+        const base = file.name.replace(/\.[^.]+$/, '') || 'Import';
+        const entry = await this.createStagedQueue(
+          usernames,
+          `${base} (${new Date().toLocaleDateString()})`
+        );
+        if (!entry) {
+          this.toast('No usernames found in file.', { kind: 'warn' });
+          return;
+        }
+        this.toast(
+          entry.activated
+            ? `Set <b>${entry.users.length}</b> accounts as active queue “${this.escapeHtml(entry.label)}”`
+            : `Imported <b>${entry.users.length}</b> accounts into saved queue “${this.escapeHtml(entry.label)}”`,
+          { kind: 'success' }
+        );
+        await this.refreshUIFromStorage();
       } catch (error) {
         console.error('Error importing to-block users:', error);
         this.toast('Could not import file', { kind: 'danger' });
@@ -1249,7 +1776,9 @@ class OptionsManager {
     settings = AccountData.updateActiveAccountLists(settings, {
       toBlockUsers: [],
       toBlockNotFoundUsers: [],
-      toBlockTryAgainUsers: []
+      toBlockTryAgainUsers: [],
+      toBlockActiveQueueId: null,
+      toBlockActiveQueueLabel: null
     });
     await this.persistSettings(settings);
     this._queueSelected.clear();
@@ -1388,6 +1917,16 @@ class OptionsManager {
     this.toast(message, { kind: 'success' });
   }
 
+  focusCurrentTabSearch() {
+    const panel = document.querySelector('.tab-panel.active');
+    if (!panel) return false;
+    const input = panel.querySelector('input[type="search"]');
+    if (!input || input.disabled) return false;
+    input.focus();
+    if (typeof input.select === 'function') input.select();
+    return true;
+  }
+
   switchTab(tabId, opts = {}) {
     this.currentTab = tabId;
     localStorage.setItem('ocb_route', tabId);
@@ -1453,11 +1992,7 @@ class OptionsManager {
 
     document.getElementById('toggle-all-pages')?.addEventListener('click', () => this.toggleAllPages());
 
-    document.getElementById('queue-dropzone')?.addEventListener('click', () => this.importToBlockUsers());
-    document.getElementById('queue-choose-file')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.importToBlockUsers();
-    });
+    this.initQueueAddUI();
     document.getElementById('clear-queue-cancel')?.addEventListener('click', () => this.closeClearQueueConfirm());
     document.getElementById('clear-queue-confirm')?.addEventListener('click', () => {
       this.closeClearQueueConfirm();
@@ -1551,6 +2086,37 @@ class OptionsManager {
         this.closeStorageDebug();
         this.closeClearConfirm();
         this.closeClearQueueConfirm();
+        this.closeQueueAddModal();
+      }
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        (e.key === 'i' || e.key === 'I') &&
+        (this.currentTab === 'queue' || this.currentTab === 'settings' || this.currentTab === 'backup')
+      ) {
+        const t = e.target;
+        if (
+          t &&
+          (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)
+        ) {
+          return;
+        }
+        e.preventDefault();
+        if (this.currentTab === 'backup') {
+          document.getElementById('import-file')?.click();
+        } else {
+          this.importToBlockUsers();
+        }
+      }
+      if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const t = e.target;
+        if (
+          t &&
+          (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)
+        ) {
+          return;
+        }
+        if (this.focusCurrentTabSearch()) e.preventDefault();
       }
     });
 

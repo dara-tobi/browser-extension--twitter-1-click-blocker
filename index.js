@@ -171,6 +171,10 @@ class TwitterBlocker {
 
   async handleDOMMutation(mutation) {
     this.setUsername();
+    if (this.getProfilePageInfo().isOwnProfilePage) {
+      this.removeProfileHeaderBlockButtons();
+      return;
+    }
     if (this.isToBlockQueueProfileTab()) {
       if (this._queueRunAborted || this._queueStepComplete) return;
       const queueProfileHandled = await this.handleToBlockQueueProfilePage(mutation);
@@ -183,9 +187,6 @@ class TwitterBlocker {
     if (handle) {
       this.syncLoggedInAccountIfNeeded(handle);
     }
-    if (this.getProfilePageInfo().isOwnProfilePage) {
-      this.removeProfileHeaderBlockButtons();
-    }
     this.handleConfirmUserBlock(mutation);
     this.handleOptionsMenu(mutation);
     this.addBlockButtonsToTimelines(mutation);
@@ -196,9 +197,6 @@ class TwitterBlocker {
     this.handleGrokButtonOverlap(mutation);
     this.addBlockButtonsToEngagementsPages(mutation);
     // this.addBlockAllButtonToEngagementsPages(mutation);
-    if (this.getProfilePageInfo().isOwnProfilePage) {
-      this.removeProfileHeaderBlockButtons();
-    }
   }
 
   initMessageListener() {
@@ -307,6 +305,7 @@ class TwitterBlocker {
   }
 
   async addBlockButtonsToTimelines(mutation) {
+    if (this.getProfilePageInfo().isOwnProfilePage) return;
     if (!await this.shouldShowButtonOnPage('timeline')) return;
     const wrapper = this.detectTweetUsernameWrapper(mutation);
     if (wrapper) {
@@ -427,6 +426,9 @@ class TwitterBlocker {
   }
 
   removeProfileHeaderBlockButtons() {
+    document.querySelectorAll(`.${CONFIG.classes.blockButton}`).forEach((btn) => btn.remove());
+    document.querySelectorAll(`.${CONFIG.classes.blockButtonWrapper}`).forEach((wrapper) => wrapper.remove());
+
     const profileActions = document.querySelector(CONFIG.selectors.userActions);
     const editProfileButton = document.querySelector('[data-testid="editProfileButton"]');
     const anchors = [profileActions, editProfileButton].filter(Boolean);
@@ -754,6 +756,7 @@ class TwitterBlocker {
   }
 
   async handleEngagementPages(mutation) {
+    if (this.getProfilePageInfo().isOwnProfilePage) return;
     const pageType = this.getPageType();
     if (!await this.shouldShowButtonOnPage(pageType)) return;
 
@@ -1004,7 +1007,10 @@ class TwitterBlocker {
           settings.stats.totalMutes = (settings.stats.totalMutes || 0) + 1;
         }
       }
-      await this.settingsManager.saveSettings({ stats: settings.stats }, this.getOwnHandle());
+      const handle = this.getOwnHandle();
+      if (handle) {
+        await AccountData.patchLocalAccountList(handle, { stats: settings.stats });
+      }
     } catch (error) {
       console.error('Error saving queue profile stats:', error);
     }
@@ -1013,7 +1019,7 @@ class TwitterBlocker {
   async saveUserToStorage(username, action, notifyQueue = false) {
     try {
       await this.syncLoggedInAccount();
-      const settings = await this.settingsManager.loadSettings(this.getOwnHandle());
+      const settings = await this.settingsManager.loadSettings(this.getOwnHandle(), { persist: false });
 
       if (!settings.stats) {
         settings.stats = {
@@ -1249,6 +1255,7 @@ class TwitterBlocker {
   }
 
   async addBlockButtonsToEngagementsPages(mutation) {
+    if (this.getProfilePageInfo().isOwnProfilePage) return;
     const pageType = this.getPageType();
     if (!await this.shouldShowButtonOnPage(pageType)) return;
 

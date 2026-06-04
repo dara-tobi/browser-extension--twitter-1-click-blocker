@@ -39,9 +39,20 @@ chrome.runtime.onStartup.addListener(() => {
   void clearQueueRuntimeState();
 });
 
-async function loadMigratedSettings(detectedHandle, persist = true) {
+async function resolveQueueAccountHandle(explicitHandle) {
+  const normalized = AccountData.normalizeHandle(explicitHandle);
+  if (normalized) return normalized;
+  const { loggedInHandle } = await chrome.storage.local.get('loggedInHandle');
+  return AccountData.normalizeHandle(loggedInHandle);
+}
+
+async function loadMigratedSettings(detectedHandle, persist = false) {
+  const handle = await resolveQueueAccountHandle(detectedHandle);
   let settings = await AccountData.loadFromChromeStorage({});
-  settings = AccountData.migrateSettings(settings, detectedHandle);
+  settings = AccountData.migrateSettings(settings, handle);
+  if (handle) {
+    settings = AccountData.switchActiveAccount(settings, handle);
+  }
   if (persist) {
     await AccountData.saveToChromeStorage(settings);
   }
@@ -50,6 +61,13 @@ async function loadMigratedSettings(detectedHandle, persist = true) {
 
 function getActiveAccountLists(settings) {
   return AccountData.getAccount(settings, settings.activeAccount);
+}
+
+async function loadActiveQueueAccount() {
+  const handle = await resolveQueueAccountHandle();
+  if (!handle) return { handle: null, account: null };
+  const account = await AccountData.getLocalAccountRecord(handle);
+  return { handle, account: account || AccountData.defaultAccountData() };
 }
 
 let isAdvancingQueue = false;
@@ -210,11 +228,9 @@ async function finalizeQueueRun(runStatus) {
     alreadyMuted: snap.stats.alreadyMuted || 0
   };
 
-  let settings = await loadMigratedSettings(null, false);
-  const account = getActiveAccountLists(settings);
-  const history = [record, ...(account.queueRunHistory || [])].slice(0, QUEUE_RUN_HISTORY_LIMIT);
-  settings = AccountData.updateActiveAccountLists(settings, { queueRunHistory: history });
-  await AccountData.saveToChromeStorage(settings);
+  const handle = await resolveQueueAccountHandle();
+  if (!handle) return;
+  await AccountData.appendQueueRunHistoryLocal(handle, record, QUEUE_RUN_HISTORY_LIMIT);
 }
 
 async function getQueueRunBatchSet() {
@@ -268,10 +284,10 @@ async function setQueueRunning(running, queueAction, opts = {}) {
 }
 
 async function requeueForTryAgain(username) {
-  let settings = await loadMigratedSettings(null, false);
-  const account = getActiveAccountLists(settings);
+  const { handle, account } = await loadActiveQueueAccount();
+  if (!handle || !account) return;
   const queue = AccountData.moveToBlockUserToQueueEnd(account.toBlockUsers || [], username);
-  settings = AccountData.updateActiveAccountLists(settings, {
+  await AccountData.patchLocalAccountList(handle, {
     toBlockUsers: queue,
     toBlockTryAgainUsers: AccountData.addToBlockTryAgainTag(
       account.toBlockTryAgainUsers,
@@ -282,7 +298,6 @@ async function requeueForTryAgain(username) {
       username
     )
   });
-  await AccountData.saveToChromeStorage(settings);
 }
 
 async function handleQueueTabStall(expectedGen) {
@@ -316,26 +331,23 @@ function getBulkQueueAction(accountOrSettings) {
 }
 
 async function removeUsernameFromToBlockQueue(username) {
-  let settings = await loadMigratedSettings(null, false);
-  const account = getActiveAccountLists(settings);
-  account.toBlockUsers = (account.toBlockUsers || []).filter(
+  const { handle, account } = await loadActiveQueueAccount();
+  if (!handle || !account) return [];
+  const toBlockUsers = (account.toBlockUsers || []).filter(
     (u) => u.toLowerCase() !== username.toLowerCase()
   );
-  account.toBlockNotFoundUsers = AccountData.removeToBlockNotFoundTag(
+  const toBlockNotFoundUsers = AccountData.removeToBlockNotFoundTag(
     account.toBlockNotFoundUsers,
     username
   );
-  settings = AccountData.updateActiveAccountLists(settings, {
-    toBlockUsers: account.toBlockUsers,
-    toBlockNotFoundUsers: account.toBlockNotFoundUsers
-  });
-  await AccountData.saveToChromeStorage(settings);
-  return account.toBlockUsers;
+  await AccountData.patchLocalAccountList(handle, { toBlockUsers, toBlockNotFoundUsers });
+  return toBlockUsers;
 }
 
 async function skipAlreadyActionedQueueHead() {
-  let settings = await loadMigratedSettings(null, false);
-  let account = getActiveAccountLists(settings);
+  const { handle, account: initial } = await loadActiveQueueAccount();
+  if (!handle || !initial) return null;
+  let account = initial;
   const queueAction = getBulkQueueAction(account);
   const batchSet = await getQueueRunBatchSet();
   const skipped = [];
@@ -343,38 +355,41 @@ async function skipAlreadyActionedQueueHead() {
   while ((next = findNextQueueUserForRun(account, batchSet))) {
     if (!AccountData.isOnBlockedOrMutedList(next, account.stats, queueAction)) break;
     skipped.push(next);
-    account.toBlockUsers = (account.toBlockUsers || []).filter(
-      (u) => u.toLowerCase() !== next.toLowerCase()
-    );
-    account.toBlockNotFoundUsers = AccountData.removeToBlockNotFoundTag(
-      account.toBlockNotFoundUsers,
-      next
-    );
+    account = {
+      ...account,
+      toBlockUsers: (account.toBlockUsers || []).filter(
+        (u) => u.toLowerCase() !== next.toLowerCase()
+      ),
+      toBlockNotFoundUsers: AccountData.removeToBlockNotFoundTag(
+        account.toBlockNotFoundUsers,
+        next
+      )
+    };
   }
-  if (!skipped.length) return settings;
-  for (const handle of skipped) {
+  if (!skipped.length) return account;
+  for (const user of skipped) {
     await incrementQueueRunStat(queueAction === 'mute' ? 'alreadyMuted' : 'alreadyBlocked');
   }
-  settings = AccountData.updateActiveAccountLists(settings, {
+  await AccountData.patchLocalAccountList(handle, {
     toBlockUsers: account.toBlockUsers,
     toBlockNotFoundUsers: account.toBlockNotFoundUsers
   });
-  await AccountData.saveToChromeStorage(settings);
-  return settings;
+  return account;
 }
 
 async function openNextInToBlockQueue(expectedGen) {
   if (expectedGen !== undefined && expectedGen !== queueGeneration) return;
   if (!(await isQueueRunningInStorage())) return;
 
-  let settings = await skipAlreadyActionedQueueHead();
+  const account = await skipAlreadyActionedQueueHead();
   if (expectedGen !== undefined && expectedGen !== queueGeneration) return;
   if (!(await isQueueRunningInStorage())) return;
 
-  const account = getActiveAccountLists(settings);
-  const queueAction = getBulkQueueAction(account);
+  const active = account || (await loadActiveQueueAccount()).account;
+  if (!active) return;
+  const queueAction = getBulkQueueAction(active);
   const batchSet = await getQueueRunBatchSet();
-  const username = findNextQueueUserForRun(account, batchSet);
+  const username = findNextQueueUserForRun(active, batchSet);
   if (!username) {
     await setQueueRunning(false, null, { runStatus: 'completed' });
     return;
@@ -404,14 +419,14 @@ async function advanceToBlockQueue(completedUsername, options = {}) {
     } else if (options.alreadyMuted) {
       await incrementQueueRunStat('alreadyMuted');
     } else if (completedUsername && !options.keepInQueue) {
-      const settings = await loadMigratedSettings(null, false);
-      const queueAction = getBulkQueueAction(getActiveAccountLists(settings));
+      const { account } = await loadActiveQueueAccount();
+      const queueAction = getBulkQueueAction(account);
       await incrementQueueRunStat(queueAction === 'mute' ? 'muted' : 'blocked');
     }
 
     if (completedUsername) {
-      let settings = await loadMigratedSettings(null, false);
-      const account = getActiveAccountLists(settings);
+      const { handle, account } = await loadActiveQueueAccount();
+      if (!handle || !account) return;
       const listsUpdate = {};
       if (!options.keepInQueue) {
         listsUpdate.toBlockUsers = (account.toBlockUsers || []).filter(
@@ -432,8 +447,7 @@ async function advanceToBlockQueue(completedUsername, options = {}) {
         );
       }
       if (Object.keys(listsUpdate).length) {
-        settings = AccountData.updateActiveAccountLists(settings, listsUpdate);
-        await AccountData.saveToChromeStorage(settings);
+        await AccountData.patchLocalAccountList(handle, listsUpdate);
       }
     }
 
@@ -449,8 +463,7 @@ async function advanceToBlockQueue(completedUsername, options = {}) {
 
     if (!(await isQueueRunningInStorage())) return;
 
-    const settings = await loadMigratedSettings(null, false);
-    const account = getActiveAccountLists(settings);
+    const { account } = await loadActiveQueueAccount();
     const batchSet = await getQueueRunBatchSet();
     if (!findNextQueueUserForRun(account, batchSet)) {
       await setQueueRunning(false, null, { runStatus: 'completed' });
@@ -464,8 +477,7 @@ async function advanceToBlockQueue(completedUsername, options = {}) {
 }
 
 async function startToBlockQueue() {
-  const settings = await loadMigratedSettings(null, false);
-  const account = getActiveAccountLists(settings);
+  const { account } = await loadActiveQueueAccount();
   const queue = account.toBlockUsers || [];
   if (!queue.length) return;
 

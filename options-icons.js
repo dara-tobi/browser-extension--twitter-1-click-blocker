@@ -37,6 +37,7 @@ const ICON_PATHS = {
   play: '<path d="M6 4l14 8-14 8z" fill="currentColor" stroke="none"/>',
   stop: '<rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor" stroke="none"/>',
   minus: '<path d="M5 12h14"/>',
+  plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
 };
 

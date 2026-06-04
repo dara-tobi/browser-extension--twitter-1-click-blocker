@@ -86,7 +86,7 @@ class SettingsManager {
         try {
             let settings = await AccountData.loadFromChromeStorage(DEFAULT_SETTINGS);
             settings = AccountData.migrateSettings(settings, detectedHandle);
-            if (options.persist !== false) {
+            if (options.persist === true) {
                 await AccountData.saveToChromeStorage(settings);
             }
             this.settings = settings;

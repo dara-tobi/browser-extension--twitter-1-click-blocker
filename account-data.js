@@ -9,6 +9,9 @@ const DEFAULT_ACCOUNT_DATA = {
   toBlockNotFoundUsers: [],
   toBlockTryAgainUsers: [],
   toBlockShowNotFound: true,
+  toBlockStagedQueues: [],
+  toBlockActiveQueueId: null,
+  toBlockActiveQueueLabel: null,
   bulkQueueAction: 'block',
   queueRunHistory: []
 };
@@ -201,6 +204,9 @@ function getAccount(settings, accountKey) {
     toBlockNotFoundUsers: account.toBlockNotFoundUsers || [],
     toBlockTryAgainUsers: account.toBlockTryAgainUsers || [],
     toBlockShowNotFound: account.toBlockShowNotFound !== false,
+    toBlockStagedQueues: account.toBlockStagedQueues || [],
+    toBlockActiveQueueId: account.toBlockActiveQueueId || null,
+    toBlockActiveQueueLabel: account.toBlockActiveQueueLabel || null,
     bulkQueueAction: account.bulkQueueAction || 'block',
     queueRunHistory: account.queueRunHistory || []
   };
@@ -215,6 +221,9 @@ function setAccount(settings, accountKey, accountData) {
     toBlockNotFoundUsers: accountData.toBlockNotFoundUsers || [],
     toBlockTryAgainUsers: accountData.toBlockTryAgainUsers || [],
     toBlockShowNotFound: accountData.toBlockShowNotFound !== false,
+    toBlockStagedQueues: accountData.toBlockStagedQueues || [],
+    toBlockActiveQueueId: accountData.toBlockActiveQueueId || null,
+    toBlockActiveQueueLabel: accountData.toBlockActiveQueueLabel || null,
     bulkQueueAction: accountData.bulkQueueAction || 'block',
     queueRunHistory: accountData.queueRunHistory || []
   };
@@ -357,9 +366,26 @@ function resolveForActiveAccount(settings) {
     toBlockNotFoundUsers: account.toBlockNotFoundUsers,
     toBlockTryAgainUsers: account.toBlockTryAgainUsers,
     toBlockShowNotFound: account.toBlockShowNotFound,
+    toBlockStagedQueues: account.toBlockStagedQueues,
+    toBlockActiveQueueId: account.toBlockActiveQueueId,
+    toBlockActiveQueueLabel: account.toBlockActiveQueueLabel,
     bulkQueueAction: account.bulkQueueAction,
     queueRunHistory: account.queueRunHistory
   };
+}
+
+function mergeUsernameLists(...lists) {
+  const seen = new Set();
+  const out = [];
+  for (const list of lists) {
+    for (const raw of list || []) {
+      const key = listUsernameKey(raw);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(key);
+    }
+  }
+  return out;
 }
 
 function updateActiveAccountLists(settings, listsUpdate) {
@@ -379,6 +405,15 @@ function updateActiveAccountLists(settings, listsUpdate) {
   }
   if (listsUpdate.toBlockShowNotFound !== undefined) {
     account.toBlockShowNotFound = listsUpdate.toBlockShowNotFound;
+  }
+  if (listsUpdate.toBlockStagedQueues !== undefined) {
+    account.toBlockStagedQueues = listsUpdate.toBlockStagedQueues;
+  }
+  if (listsUpdate.toBlockActiveQueueId !== undefined) {
+    account.toBlockActiveQueueId = listsUpdate.toBlockActiveQueueId;
+  }
+  if (listsUpdate.toBlockActiveQueueLabel !== undefined) {
+    account.toBlockActiveQueueLabel = listsUpdate.toBlockActiveQueueLabel;
   }
   if (listsUpdate.bulkQueueAction !== undefined) {
     account.bulkQueueAction = listsUpdate.bulkQueueAction;
@@ -463,6 +498,9 @@ function extractAccountListsFromSettings(settings) {
       toBlockNotFoundUsers: account.toBlockNotFoundUsers || [],
       toBlockTryAgainUsers: account.toBlockTryAgainUsers || [],
       toBlockShowNotFound: account.toBlockShowNotFound !== false,
+      toBlockStagedQueues: account.toBlockStagedQueues || [],
+      toBlockActiveQueueId: account.toBlockActiveQueueId || null,
+      toBlockActiveQueueLabel: account.toBlockActiveQueueLabel || null,
       bulkQueueAction: account.bulkQueueAction || 'block',
       queueRunHistory: account.queueRunHistory || []
     };
@@ -502,9 +540,60 @@ function mergeAccountListsFromStorageRecord(account) {
     toBlockNotFoundUsers: account.toBlockNotFoundUsers || [],
     toBlockTryAgainUsers: account.toBlockTryAgainUsers || [],
     toBlockShowNotFound: account.toBlockShowNotFound !== false,
+    toBlockStagedQueues: account.toBlockStagedQueues || [],
+    toBlockActiveQueueId: account.toBlockActiveQueueId || null,
+    toBlockActiveQueueLabel: account.toBlockActiveQueueLabel || null,
     bulkQueueAction: account.bulkQueueAction || 'block',
     queueRunHistory: account.queueRunHistory || []
   };
+}
+
+function mergeAccountListStorageRecords(existing, incoming) {
+  const ex = mergeAccountListsFromStorageRecord(existing);
+  const inc = mergeAccountListsFromStorageRecord(incoming);
+  return {
+    stats: {
+      totalBlocks: Math.max(inc.stats.totalBlocks, ex.stats.totalBlocks),
+      totalMutes: Math.max(inc.stats.totalMutes, ex.stats.totalMutes),
+      blockedUsers:
+        inc.stats.blockedUsers.length >= ex.stats.blockedUsers.length
+          ? inc.stats.blockedUsers
+          : ex.stats.blockedUsers,
+      mutedUsers:
+        inc.stats.mutedUsers.length >= ex.stats.mutedUsers.length
+          ? inc.stats.mutedUsers
+          : ex.stats.mutedUsers
+    },
+    toBlockUsers: inc.toBlockUsers,
+    toBlockNotFoundUsers:
+      inc.toBlockNotFoundUsers.length >= ex.toBlockNotFoundUsers.length
+        ? inc.toBlockNotFoundUsers
+        : ex.toBlockNotFoundUsers,
+    toBlockTryAgainUsers:
+      inc.toBlockTryAgainUsers.length >= ex.toBlockTryAgainUsers.length
+        ? inc.toBlockTryAgainUsers
+        : ex.toBlockTryAgainUsers,
+    toBlockShowNotFound: inc.toBlockShowNotFound,
+    toBlockStagedQueues: inc.toBlockStagedQueues,
+    toBlockActiveQueueId: inc.toBlockActiveQueueId ?? ex.toBlockActiveQueueId,
+    toBlockActiveQueueLabel: inc.toBlockActiveQueueLabel ?? ex.toBlockActiveQueueLabel,
+    bulkQueueAction: inc.bulkQueueAction || ex.bulkQueueAction,
+    queueRunHistory:
+      inc.queueRunHistory.length >= ex.queueRunHistory.length
+        ? inc.queueRunHistory
+        : ex.queueRunHistory
+  };
+}
+
+function mergeStoredAccountLists(existing, extracted) {
+  const prev = existing || {};
+  const next = extracted || {};
+  const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+  const out = {};
+  for (const key of keys) {
+    out[key] = mergeAccountListStorageRecords(prev[key], next[key]);
+  }
+  return out;
 }
 
 function mergeAccountListsIntoSettings(settings, accountLists) {
@@ -514,6 +603,83 @@ function mergeAccountListsIntoSettings(settings, accountLists) {
     settings.accounts[key] = mergeAccountListsFromStorageRecord(accountLists[key]);
   }
   return settings;
+}
+
+function applySaveSafetyMerge(prev, merged) {
+  const previous = prev || {};
+  const out = { ...merged };
+  for (const key of Object.keys(merged)) {
+    const p = mergeAccountListsFromStorageRecord(previous[key]);
+    const m = mergeAccountListsFromStorageRecord(merged[key]);
+    let safe = m;
+    if (p.stats.blockedUsers.length && !m.stats.blockedUsers.length) {
+      safe = {
+        ...safe,
+        stats: {
+          ...safe.stats,
+          blockedUsers: p.stats.blockedUsers,
+          totalBlocks: Math.max(safe.stats.totalBlocks, p.stats.totalBlocks)
+        }
+      };
+    }
+    if (p.stats.mutedUsers.length && !m.stats.mutedUsers.length) {
+      safe = {
+        ...safe,
+        stats: {
+          ...safe.stats,
+          mutedUsers: p.stats.mutedUsers,
+          totalMutes: Math.max(safe.stats.totalMutes, p.stats.totalMutes)
+        }
+      };
+    }
+    if (p.queueRunHistory.length && !m.queueRunHistory.length) {
+      safe = { ...safe, queueRunHistory: p.queueRunHistory };
+    }
+    out[key] = safe;
+  }
+  return out;
+}
+
+async function readLocalAccountLists() {
+  const localResult = await chrome.storage.local.get(ACCOUNT_LISTS_STORAGE_KEY);
+  return localResult[ACCOUNT_LISTS_STORAGE_KEY] || {};
+}
+
+async function writeLocalAccountLists(accountLists) {
+  await chrome.storage.local.set({ [ACCOUNT_LISTS_STORAGE_KEY]: accountLists });
+}
+
+async function patchLocalAccountList(accountKey, patch) {
+  const key = normalizeHandle(accountKey);
+  if (!key || !patch) return null;
+  const accountLists = await readLocalAccountLists();
+  const base = mergeAccountListsFromStorageRecord(accountLists[key]);
+  const next = mergeAccountListsFromStorageRecord({ ...base, ...patch });
+  if (patch.stats) {
+    const inc = mergeAccountListsFromStorageRecord({ stats: patch.stats });
+    next.stats = mergeAccountListStorageRecords({ stats: base.stats }, { stats: inc.stats }).stats;
+  }
+  accountLists[key] = next;
+  await writeLocalAccountLists(accountLists);
+  return next;
+}
+
+async function appendQueueRunHistoryLocal(accountKey, record, limit = 50) {
+  const key = normalizeHandle(accountKey);
+  if (!key || !record) return null;
+  const accountLists = await readLocalAccountLists();
+  const base = mergeAccountListsFromStorageRecord(accountLists[key]);
+  const history = [record, ...(base.queueRunHistory || [])].slice(0, limit);
+  accountLists[key] = { ...base, queueRunHistory: history };
+  await writeLocalAccountLists(accountLists);
+  return accountLists[key];
+}
+
+async function getLocalAccountRecord(accountKey) {
+  const key = normalizeHandle(accountKey);
+  if (!key) return null;
+  const accountLists = await readLocalAccountLists();
+  return mergeAccountListsFromStorageRecord(accountLists[key]);
 }
 
 function hasAnyListDataInAccounts(settings) {
@@ -548,9 +714,12 @@ async function loadFromChromeStorage(defaultSettings) {
 }
 
 async function saveToChromeStorage(settings) {
-  const accountLists = extractAccountListsFromSettings(settings);
+  const extracted = extractAccountListsFromSettings(settings);
+  const prev = await readLocalAccountLists();
+  let accountLists = mergeStoredAccountLists(prev, extracted);
+  accountLists = applySaveSafetyMerge(prev, accountLists);
   const slim = slimAccountsForSync(settings);
-  await chrome.storage.local.set({ [ACCOUNT_LISTS_STORAGE_KEY]: accountLists });
+  await writeLocalAccountLists(accountLists);
   await chrome.storage.sync.set({ settings: slim });
 }
 
@@ -694,7 +863,15 @@ const AccountData = {
   addToBlockTryAgainTag,
   removeToBlockTryAgainTag,
   moveToBlockUserToQueueEnd,
-  findNextToBlockQueueUser
+  findNextToBlockQueueUser,
+  mergeUsernameLists,
+  mergeStoredAccountLists,
+  mergeAccountListStorageRecords,
+  readLocalAccountLists,
+  writeLocalAccountLists,
+  patchLocalAccountList,
+  appendQueueRunHistoryLocal,
+  getLocalAccountRecord
 };
 
 if (typeof window !== 'undefined') {
