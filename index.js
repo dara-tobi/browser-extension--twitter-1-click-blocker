@@ -1137,7 +1137,8 @@ class TwitterBlocker {
       { 
         type: "feedback", 
         data: `${action}_button_clicked`, 
-        username 
+        username,
+        fromToBlock: this.isFromToBlockStandaloneSession()
       }
     );
   }

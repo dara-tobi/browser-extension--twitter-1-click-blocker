@@ -404,23 +404,8 @@ async function openNextInToBlockQueue(expectedGen) {
   await setQueueTabPointer(tab.id, username);
 }
 
-function isToBlockStandaloneSender(sender) {
-  const url = sender?.tab?.url || '';
-  return url.includes('toblock=1');
-}
-
-function isToBlockStandaloneFeedback(message, sender) {
-  if (message?.fromToBlock) return true;
-  return isToBlockStandaloneSender(sender);
-}
-
-function usernameFromSenderTab(sender) {
-  try {
-    const segment = new URL(sender.tab.url).pathname.split('/')[1];
-    return segment ? segment.replace('@', '') : null;
-  } catch (e) {
-    return null;
-  }
+function isToBlockStandaloneFeedback(message) {
+  return !!message?.fromToBlock;
 }
 
 async function handleStandaloneToBlockAlreadyActioned(username, eventType) {
@@ -600,8 +585,8 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         if (username) {
           await advanceToBlockQueue(username);
         }
-      } else if (isToBlockStandaloneFeedback(message, sender)) {
-        const username = message.username || usernameFromSenderTab(sender);
+      } else if (isToBlockStandaloneFeedback(message)) {
+        const username = message.username;
         if (username) {
           await handleStandaloneToBlockNotFound(username);
         }
@@ -639,7 +624,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
           alreadyMuted: message.eventType === 'already_muted'
         });
       } else if (sender.tab?.id) {
-        if (isToBlockStandaloneFeedback(message, sender) && username) {
+        if (isToBlockStandaloneFeedback(message) && username) {
           if (message.data === 'already_actioned') {
             await handleStandaloneToBlockAlreadyActioned(username, message.eventType);
           } else if (message.data === 'account_not_found') {
@@ -667,7 +652,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         return;
       }
 
-      if (isToBlockStandaloneFeedback(message, sender) && username) {
+      if (isToBlockStandaloneFeedback(message) && username) {
         emitToBlockQueueEvent(action === 'block' ? 'blocked' : 'muted', username);
       }
 
