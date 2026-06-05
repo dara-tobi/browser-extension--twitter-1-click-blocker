@@ -639,7 +639,7 @@ class OptionsManager {
     this._activeQueueLabel = settings.toBlockActiveQueueLabel || null;
 
     const hasQueue = (settings.toBlockUsers || []).length > 0;
-    const hasStaged = this._stagedQueues.length > 0;
+    const hasStaged = (this._stagedQueues || []).some((q) => q.id !== this._activeQueueId);
     const hasDraft = this._pasteDraft.length > 0;
 
     if (empty) empty.hidden = hasQueue || hasStaged || hasDraft;
@@ -671,7 +671,7 @@ class OptionsManager {
     const empty = document.getElementById('queue-empty');
     if (!empty) return;
     const hasQueue = (this._queueUsers || []).length > 0;
-    const hasStaged = (this._stagedQueues || []).length > 0;
+    const hasStaged = (this._stagedQueues || []).some((q) => q.id !== this._activeQueueId);
     const hasDraft = this._pasteDraft.length > 0;
     empty.hidden = hasQueue || hasStaged || hasDraft;
   }
@@ -751,7 +751,18 @@ class OptionsManager {
     });
   }
 
+  queueUsernameKey(username) {
+    return (AccountData.listUsernameKey(username) || username).toLowerCase();
+  }
+
+  queueUsernameSetsMatch(a, b) {
+    const keysA = (a || []).map((u) => this.queueUsernameKey(u)).sort();
+    const keysB = (b || []).map((u) => this.queueUsernameKey(u)).sort();
+    return keysA.length === keysB.length && keysA.every((k, i) => k === keysB[i]);
+  }
+
   async createStagedQueue(users, label) {
+    await this.loadSettings();
     if (!this.currentHandle) return null;
     const merged = AccountData.mergeUsernameLists(users);
     if (!merged.length) return null;
@@ -766,7 +777,36 @@ class OptionsManager {
       users: merged
     };
 
-    if (!(account.toBlockUsers || []).length) {
+    if ((account.toBlockUsers || []).length) {
+      const queueAction = account.bulkQueueAction || 'block';
+      const eligible = AccountData.filterUsernamesForToBlockQueue(merged, account.stats, queueAction);
+      if (!eligible.length) return null;
+      entry.users = eligible;
+      if (
+        account.toBlockActiveQueueId &&
+        this.queueUsernameSetsMatch(account.toBlockUsers, eligible)
+      ) {
+        return {
+          id: account.toBlockActiveQueueId,
+          label: account.toBlockActiveQueueLabel || entryLabel,
+          users: account.toBlockUsers,
+          activated: true,
+          alreadyActive: true
+        };
+      }
+      const staged = [...(account.toBlockStagedQueues || [])];
+      staged.push(entry);
+      settings = AccountData.updateActiveAccountLists(settings, { toBlockStagedQueues: staged });
+      await this.persistSettings(settings);
+      this._stagedQueues = staged;
+      this.renderQueueStagedSection();
+      const stagedSection = document.getElementById('queue-staged-section');
+      if (stagedSection) stagedSection.hidden = false;
+      this.updateQueueEmptyVisibility();
+      return entry;
+    }
+
+    {
       const queueAction = account.bulkQueueAction || 'block';
       const eligible = AccountData.filterUsernamesForToBlockQueue(merged, account.stats, queueAction);
       if (!eligible.length) return null;
@@ -789,17 +829,6 @@ class OptionsManager {
       this.updateQueueEmptyVisibility();
       return { ...entry, activated: true };
     }
-
-    const staged = [...(account.toBlockStagedQueues || [])];
-    staged.push(entry);
-    settings = AccountData.updateActiveAccountLists(settings, { toBlockStagedQueues: staged });
-    await this.persistSettings(settings);
-    this._stagedQueues = staged;
-    this.renderQueueStagedSection();
-    const stagedSection = document.getElementById('queue-staged-section');
-    if (stagedSection) stagedSection.hidden = false;
-    this.updateQueueEmptyVisibility();
-    return entry;
   }
 
   async deleteStagedQueue(id) {
@@ -1059,13 +1088,24 @@ class OptionsManager {
     });
 
     document.getElementById('queue-paste-save-staged')?.addEventListener('click', async () => {
+      const btn = document.getElementById('queue-paste-save-staged');
+      if (btn?.disabled) return;
       const handles = this.collectPasteHandles();
       if (!handles.length) {
         this.toast('Add at least one handle first.', { kind: 'warn' });
         return;
       }
-      const entry = await this.createStagedQueue(handles, `Queue ${(this._stagedQueues?.length || 0) + 1}`);
-      if (entry) {
+      if (btn) btn.disabled = true;
+      try {
+        const entry = await this.createStagedQueue(handles, `Queue ${(this._stagedQueues?.length || 0) + 1}`);
+        if (!entry) {
+          if (!this.currentHandle) {
+            this.toast('Could not detect your X account yet. Open x.com while logged in, or set your handle in Settings.', { kind: 'warn' });
+          } else {
+            this.toast('No accounts could be added (they may already be blocked or muted).', { kind: 'warn' });
+          }
+          return;
+        }
         this.clearPasteDraftUI();
         this.closeQueueAddModal();
         await this.refreshUIFromStorage();
@@ -1075,6 +1115,11 @@ class OptionsManager {
             : `Saved <b>${entry.users.length}</b> accounts as “${this.escapeHtml(entry.label)}”`,
           { kind: 'success' }
         );
+      } catch (error) {
+        console.error('Error saving staged queue:', error);
+        this.toast('Could not save queue. Try again.', { kind: 'danger' });
+      } finally {
+        if (btn) btn.disabled = false;
       }
     });
 
@@ -1452,8 +1497,31 @@ class OptionsManager {
   }
 
   showToBlockFeedback(event) {
-    if (event?.type !== 'run_complete') return;
-    this.toast(UI_COPY.queue.savedToStatisticsToast, { kind: 'accent', ttl: 3200 });
+    if (!event?.username && event?.type !== 'run_complete') return;
+    const messages = {
+      blocked: 'was blocked',
+      muted: 'was muted',
+      already_blocked: 'is already blocked',
+      already_muted: 'is already muted',
+      not_found: 'no longer exists',
+      try_again: 'timed out. Moved to the end of the queue.',
+      run_complete: UI_COPY.queue.finished
+    };
+    if (event.type === 'run_complete') {
+      this.toast(UI_COPY.queue.savedToStatisticsToast, { kind: 'accent', ttl: 3200 });
+      return;
+    }
+    const handle = AccountData.listUsernameKey(event.username) || event.username;
+    const msg = messages[event.type] || 'updated';
+    this.toast(`<b>@${this.escapeHtml(handle)}</b> ${msg}`, {
+      kind:
+        event.type === 'not_found'
+          ? 'warn'
+          : event.type === 'blocked' || event.type === 'muted'
+            ? 'success'
+            : 'accent',
+      ttl: 1600
+    });
   }
 
   async saveBulkQueueAction() {
@@ -2077,6 +2145,15 @@ class OptionsManager {
       }
     });
 
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.type === 'to_block_queue_feedback') {
+        this.showToBlockFeedback({ type: message.eventType, username: message.username });
+        if (!this._queueRunning) {
+          void this.refreshUIFromStorage();
+        }
+      }
+    });
+
     this.initQueueRunVisibilityCatchUp();
 
     chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -2088,13 +2165,23 @@ class OptionsManager {
         void this.syncQueueRunUiFromStorage();
         return;
       }
-      if (namespace === 'local' && this._queueRunning) {
-        if (
-          changes.toBlockQueueRunStats ||
+      if (
+        namespace === 'local' &&
+        (changes.toBlockQueueRunStats ||
           changes.toBlockQueueCurrentHandle ||
-          changes.toBlockQueueRunTotal ||
-          changes[AccountData.ACCOUNT_LISTS_STORAGE_KEY]
-        ) {
+          changes.toBlockQueueRunTotal)
+      ) {
+        void (async () => {
+          const { toBlockQueueRunning } = await chrome.storage.local.get('toBlockQueueRunning');
+          if (toBlockQueueRunning) {
+            this._queueRunning = true;
+            void this.patchQueueRunFromStorage();
+          }
+        })();
+        return;
+      }
+      if (namespace === 'local' && this._queueRunning) {
+        if (changes[AccountData.ACCOUNT_LISTS_STORAGE_KEY]) {
           void this.patchQueueRunFromStorage();
           return;
         }

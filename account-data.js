@@ -539,15 +539,15 @@ function mergeAccountListsFromStorageRecord(account) {
       blockedUsers: stats.blockedUsers || [],
       mutedUsers: stats.mutedUsers || []
     },
-    toBlockUsers: account.toBlockUsers || [],
-    toBlockNotFoundUsers: account.toBlockNotFoundUsers || [],
-    toBlockTryAgainUsers: account.toBlockTryAgainUsers || [],
-    toBlockShowNotFound: account.toBlockShowNotFound !== false,
-    toBlockStagedQueues: account.toBlockStagedQueues || [],
-    toBlockActiveQueueId: account.toBlockActiveQueueId || null,
-    toBlockActiveQueueLabel: account.toBlockActiveQueueLabel || null,
-    bulkQueueAction: account.bulkQueueAction || 'block',
-    queueRunHistory: account.queueRunHistory || []
+    toBlockUsers: account?.toBlockUsers || [],
+    toBlockNotFoundUsers: account?.toBlockNotFoundUsers || [],
+    toBlockTryAgainUsers: account?.toBlockTryAgainUsers || [],
+    toBlockShowNotFound: account?.toBlockShowNotFound !== false,
+    toBlockStagedQueues: account?.toBlockStagedQueues || [],
+    toBlockActiveQueueId: account?.toBlockActiveQueueId || null,
+    toBlockActiveQueueLabel: account?.toBlockActiveQueueLabel || null,
+    bulkQueueAction: account?.bulkQueueAction || 'block',
+    queueRunHistory: account?.queueRunHistory || []
   };
 }
 

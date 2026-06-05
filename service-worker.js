@@ -1,6 +1,6 @@
 importScripts('account-data.js');
 
-chrome.runtime.setUninstallURL('https://docs.google.com/forms/d/15hOeb2GIHZXcwa8HeiVIIEAqe8gntzGyYLZS5XXTZSE');
+// chrome.runtime.setUninstallURL('https://docs.google.com/forms/d/15hOeb2GIHZXcwa8HeiVIIEAqe8gntzGyYLZS5XXTZSE');
 
 const QUEUE_STORAGE_KEYS = [
   'toBlockQueueRunning',
@@ -108,6 +108,18 @@ async function flushRunStatsNow() {
   if (currentRunStats) {
     await chrome.storage.local.set({ toBlockQueueRunStats: currentRunStats });
   }
+}
+
+function emitToBlockQueueEvent(eventType, username) {
+  if (!eventType || !username) return;
+  const normalized = AccountData.listUsernameKey(username) || username;
+  chrome.runtime
+    .sendMessage({
+      type: 'to_block_queue_feedback',
+      eventType,
+      username: normalized
+    })
+    .catch(() => {});
 }
 
 async function isQueueRunningInStorage() {
@@ -351,6 +363,10 @@ async function skipAlreadyActionedQueueHead() {
   if (!skipped.length) return account;
   for (const user of skipped) {
     await incrementQueueRunStat(queueAction === 'mute' ? 'alreadyMuted' : 'alreadyBlocked');
+    emitToBlockQueueEvent(
+      queueAction === 'mute' ? 'already_muted' : 'already_blocked',
+      user
+    );
   }
   await AccountData.patchLocalAccountList(handle, {
     toBlockUsers: account.toBlockUsers,
@@ -396,14 +412,18 @@ async function advanceToBlockQueue(completedUsername, options = {}) {
 
     if (options.notFound) {
       await incrementQueueRunStat('notFound');
+      emitToBlockQueueEvent('not_found', completedUsername);
     } else if (options.alreadyBlocked) {
       await incrementQueueRunStat('alreadyBlocked');
+      emitToBlockQueueEvent('already_blocked', completedUsername);
     } else if (options.alreadyMuted) {
       await incrementQueueRunStat('alreadyMuted');
+      emitToBlockQueueEvent('already_muted', completedUsername);
     } else if (completedUsername && !options.keepInQueue) {
       const { account } = await loadActiveQueueAccount();
       const queueAction = getBulkQueueAction(account);
       await incrementQueueRunStat(queueAction === 'mute' ? 'muted' : 'blocked');
+      emitToBlockQueueEvent(queueAction === 'mute' ? 'muted' : 'blocked', completedUsername);
     }
 
     if (completedUsername) {
