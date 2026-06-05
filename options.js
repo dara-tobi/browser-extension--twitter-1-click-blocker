@@ -70,8 +70,6 @@ class OptionsManager {
   constructor() {
     this.currentHandle = null;
     this.currentTab = localStorage.getItem('ocb_route') || 'settings';
-    this.blockedSort = 'recent';
-    this.mutedSort = 'recent';
     this.blockedSearch = '';
     this.mutedSearch = '';
     this._blockedUsers = [];
@@ -1785,12 +1783,6 @@ class OptionsManager {
     this.toast(`Lists now saved for <b>@${updated.activeAccount}</b>`, { kind: 'success' });
   }
 
-  sortUsers(users, sort) {
-    const list = [...users];
-    if (sort === 'az') return list.sort((a, b) => a.localeCompare(b));
-    return list;
-  }
-
   filterUsers(users, q) {
     if (!q) return users;
     const lower = q.toLowerCase();
@@ -1801,7 +1793,6 @@ class OptionsManager {
     const list = document.getElementById(containerId);
     const toolbarId = kind === 'blocked' ? 'blocked-toolbar' : 'muted-toolbar';
     const toolbar = document.getElementById(toolbarId);
-    const sort = kind === 'blocked' ? this.blockedSort : this.mutedSort;
     const q = kind === 'blocked' ? this.blockedSearch : this.mutedSearch;
     const isBlocked = kind === 'blocked';
 
@@ -1822,7 +1813,7 @@ class OptionsManager {
     }
 
     let shown = this.filterUsers(users, q);
-    shown = this.sortUsers(shown, sort);
+    shown = [...shown].reverse();
 
     if (!shown.length) {
       list.innerHTML = `<div class="empty">
@@ -1835,16 +1826,16 @@ class OptionsManager {
 
     list.innerHTML = `<div class="rows">${shown.map(user => {
       const a = avatarFor(user);
-      return `<div class="row">
+      return `<a class="row row-link" href="https://twitter.com/${this.escapeHtml(user)}" target="_blank" rel="noopener">
         <div class="avatar sm" style="background:${a.grad}">${a.initial}</div>
         <div class="row-stack">
           <div class="row-handle">
-            <a class="h" href="https://twitter.com/${this.escapeHtml(user)}" target="_blank" rel="noopener">@${this.escapeHtml(user)}</a>
+            <span class="h">@${this.escapeHtml(user)}</span>
             ${icon('ext', 13, 'var(--text-3)')}
           </div>
           <div class="row-sub">${isBlocked ? 'Blocked' : 'Muted'} via extension</div>
         </div>
-      </div>`;
+      </a>`;
     }).join('')}</div>`;
   }
 
@@ -1959,24 +1950,6 @@ class OptionsManager {
       this.mutedSearch = e.target.value;
       this.updateMutedUsersList(this._mutedUsers);
     });
-
-    const wireSort = (containerId, kind) => {
-      document.getElementById(containerId)?.querySelectorAll('button').forEach(btn => {
-        btn.addEventListener('click', () => {
-          document.getElementById(containerId).querySelectorAll('button').forEach(b => b.classList.remove('on'));
-          btn.classList.add('on');
-          if (kind === 'blocked') {
-            this.blockedSort = btn.dataset.sort;
-            this.updateBlockedUsersList(this._blockedUsers);
-          } else {
-            this.mutedSort = btn.dataset.sort;
-            this.updateMutedUsersList(this._mutedUsers);
-          }
-        });
-      });
-    };
-    wireSort('blocked-sort', 'blocked');
-    wireSort('muted-sort', 'muted');
 
     document.querySelectorAll('#backup-scopes .row[data-scope]').forEach(row => {
       row.addEventListener('click', () => {

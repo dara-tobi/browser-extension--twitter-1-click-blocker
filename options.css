@@ -337,6 +337,8 @@ h1,h2,h3,h4{font-family:var(--font-display);font-weight:600;letter-spacing:-.02e
   transition:border-color .14s,background .14s,transform .14s,box-shadow .14s;
 }
 .row:hover{border-color:var(--border-2);background:var(--surface-2)}
+.row.row-link{text-decoration:none;color:inherit;cursor:pointer}
+.row.row-link:hover .row-handle .h{color:var(--accent)}
 .row.sel{border-color:var(--accent-line);background:var(--accent-soft)}
 .row.processing{border-color:var(--accent-line);box-shadow:0 0 0 3px var(--accent-soft)}
 .row.gone{opacity:.78}
