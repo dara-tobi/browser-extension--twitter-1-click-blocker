@@ -22,7 +22,7 @@ function App(){
   // ---- run loop ----
   const startRun = (act) => {
     const pending = queue.filter(i=>i.status==="pending");
-    if (pending.length===0){ toast("Queue is empty — import a list first.",{kind:"warn"}); return; }
+    if (pending.length===0){ toast("Queue is empty. Import a list first.",{kind:"warn"}); return; }
     setAction(act);
     setRun({ active:true, action:act, current:null, processed:0, doneCount:0, notFoundCount:0, total:pending.length });
     let idx = 0;

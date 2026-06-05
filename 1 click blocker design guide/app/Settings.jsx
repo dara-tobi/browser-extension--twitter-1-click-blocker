@@ -23,11 +23,11 @@ function Settings({ settings, setSettings }){
       <div className="page-head">
         <div className="page-eyebrow">Configuration</div>
         <h1 className="page-title">Settings</h1>
-        <p className="page-sub">How the one-click button behaves on X. These are everyday defaults — the bulk queue has its own controls.</p>
+        <p className="page-sub">How the one-click button behaves on X. These are everyday defaults. The bulk queue has its own controls.</p>
       </div>
 
       {/* Account */}
-      <Section title="Your X account" icon="user" desc="Block and mute lists are stored per handle. Auto-detected when you visit X — reassign if it's wrong." bordered>
+      <Section title="Your X account" icon="user" desc="Block and mute lists are stored per handle. Auto-detected when you visit X." bordered>
         <div className="spread" style={{gap:14,flexWrap:"wrap"}}>
           <div className="input-prefix" style={{flex:1,minWidth:240}}>
             <span className="pfx">@</span>

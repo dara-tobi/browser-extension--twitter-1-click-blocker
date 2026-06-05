@@ -16,7 +16,7 @@ function ListTab({ kind, items, onUndo }){
       <div className="page-head">
         <div className="page-eyebrow">Completed ledger</div>
         <h1 className="page-title">{title} <span className="muted tnum" style={{fontSize:20,fontWeight:500}}>{items.length}</span></h1>
-        <p className="page-sub">Accounts this extension has {isBlocked?"blocked":"muted"} on <b>@cottonpuree</b>. This is the extension's own record — not a live mirror of X.</p>
+        <p className="page-sub">Accounts this extension has {isBlocked?"blocked":"muted"} on <b>@cottonpuree</b>. This is the extension's own record, it is not a live mirror of X.</p>
       </div>
 
       {items.length===0 ? (

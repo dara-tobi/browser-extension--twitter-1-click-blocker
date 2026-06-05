@@ -9,7 +9,7 @@ function Stats({ stats, queueLen }){
       <div className="page-head">
         <div className="page-eyebrow">Insights</div>
         <h1 className="page-title">Statistics</h1>
-        <p className="page-sub">Actions completed through the extension. Counts increment when a block or mute succeeds — they don't pull from X's API.</p>
+        <p className="page-sub">Actions completed through the extension. Counts increment when a block or mute succeeds. They do not pull from X's API.</p>
       </div>
 
       <div className="stat-grid">

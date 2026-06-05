@@ -55,7 +55,7 @@ function Backup({ counts, onClear }){
         <div className="divline" />
         <div className="section-body" style={{paddingTop:14,paddingBottom:16,color:"var(--text-2)",fontSize:13,display:"flex",gap:9,alignItems:"flex-start"}}>
           <Icon name="info" size={16} stroke="var(--text-3)" style={{flex:"none",marginTop:1}} />
-          <span>Exports never include your X password or session — only the handles this extension manages. The To Block queue has its own import on that tab.</span>
+          <span>Exports never include your X password or session. Only the handles this extension manages. The To Block queue has its own import on that tab.</span>
         </div>
       </div>
 

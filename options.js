@@ -2193,7 +2193,7 @@ class OptionsManager {
         const muted = stats.mutedUsers || [];
         const isActive = key === mergedSettings.activeAccount;
         const label = key === '_unassigned' ? '_unassigned' : `@${key}`;
-        const summary = `${this.escapeHtml(label)}${isActive ? ' (active)' : ''} — blocked ${blocked.length}, muted ${muted.length}`;
+        const summary = `${this.escapeHtml(label)}${isActive ? ' (active)' : ''} blocked ${blocked.length}, muted ${muted.length}`;
 
         const payload = {
           stats: {

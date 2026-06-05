@@ -185,7 +185,7 @@ function ToBlock({ queue, action, setAction, run, onStart, onStop, onClear, onIm
       <div className="page-head">
         <div className="page-eyebrow">Work queue</div>
         <h1 className="page-title">To Block</h1>
-        <p className="page-sub">Queue accounts for an automated block or mute pass. Import from a JSON backup or CSV — the runner opens profiles in the background and acts one by one.</p>
+        <p className="page-sub">Queue accounts for an automated block or mute pass. Import from a JSON backup or CSV. The runner opens profiles in the background and acts one by one.</p>
       </div>
     );
   }
