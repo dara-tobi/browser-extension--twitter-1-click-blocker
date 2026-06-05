@@ -404,6 +404,64 @@ async function openNextInToBlockQueue(expectedGen) {
   await setQueueTabPointer(tab.id, username);
 }
 
+function isToBlockStandaloneSender(sender) {
+  const url = sender?.tab?.url || '';
+  return url.includes('toblock=1');
+}
+
+function isToBlockStandaloneFeedback(message, sender) {
+  if (message?.fromToBlock) return true;
+  return isToBlockStandaloneSender(sender);
+}
+
+function usernameFromSenderTab(sender) {
+  try {
+    const segment = new URL(sender.tab.url).pathname.split('/')[1];
+    return segment ? segment.replace('@', '') : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function handleStandaloneToBlockAlreadyActioned(username, eventType) {
+  const { handle, account } = await loadActiveQueueAccount();
+  if (!handle || !account || !username) return;
+  const key = username.toLowerCase();
+  const inQueue = (account.toBlockUsers || []).some((u) => u.toLowerCase() === key);
+  if (inQueue) {
+    await AccountData.patchLocalAccountList(handle, {
+      toBlockUsers: (account.toBlockUsers || []).filter((u) => u.toLowerCase() !== key),
+      toBlockNotFoundUsers: AccountData.removeToBlockNotFoundTag(
+        account.toBlockNotFoundUsers,
+        username
+      ),
+      toBlockTryAgainUsers: AccountData.removeToBlockTryAgainTag(
+        account.toBlockTryAgainUsers,
+        username
+      )
+    });
+  }
+  if (eventType === 'already_blocked' || eventType === 'already_muted') {
+    emitToBlockQueueEvent(eventType, username);
+  }
+}
+
+async function handleStandaloneToBlockNotFound(username) {
+  const { handle, account } = await loadActiveQueueAccount();
+  if (!handle || !account || !username) return;
+  const key = username.toLowerCase();
+  const inQueue = (account.toBlockUsers || []).some((u) => u.toLowerCase() === key);
+  if (inQueue) {
+    await AccountData.patchLocalAccountList(handle, {
+      toBlockNotFoundUsers: AccountData.addToBlockNotFoundTag(
+        account.toBlockNotFoundUsers,
+        username
+      )
+    });
+  }
+  emitToBlockQueueEvent('not_found', username);
+}
+
 async function advanceToBlockQueue(completedUsername, options = {}) {
   if (isAdvancingQueue) return;
   isAdvancingQueue = true;
@@ -542,6 +600,11 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         if (username) {
           await advanceToBlockQueue(username);
         }
+      } else if (isToBlockStandaloneFeedback(message, sender)) {
+        const username = message.username || usernameFromSenderTab(sender);
+        if (username) {
+          await handleStandaloneToBlockNotFound(username);
+        }
       }
 
       closeTab(sender.tab.id);
@@ -576,6 +639,13 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
           alreadyMuted: message.eventType === 'already_muted'
         });
       } else if (sender.tab?.id) {
+        if (isToBlockStandaloneFeedback(message, sender) && username) {
+          if (message.data === 'already_actioned') {
+            await handleStandaloneToBlockAlreadyActioned(username, message.eventType);
+          } else if (message.data === 'account_not_found') {
+            await handleStandaloneToBlockNotFound(username);
+          }
+        }
         closeTab(sender.tab.id);
       }
       return;
@@ -595,6 +665,10 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
           await advanceToBlockQueue(username);
         }
         return;
+      }
+
+      if (isToBlockStandaloneFeedback(message, sender) && username) {
+        emitToBlockQueueEvent(action === 'block' ? 'blocked' : 'muted', username);
       }
 
       if (sender.tab?.id) {
@@ -621,7 +695,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 
   if (message.type == 'open_tab' && message.username !== undefined) {
     const action = message.mute ? 'mute' : 'block';
-    const url = `https://x.com/${message.username}?${action}=true`;
+    const url = `https://x.com/${message.username}?${action}=true${message.toblock ? '&toblock=1' : ''}`;
     chrome.tabs.create({
       url,
       active: false,

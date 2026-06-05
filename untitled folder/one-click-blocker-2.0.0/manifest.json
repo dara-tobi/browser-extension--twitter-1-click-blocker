@@ -1,0 +1,26 @@
+{
+  "author": "Dara Oladosu",
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "permissions": ["storage", "tabs"],
+  "content_scripts": [
+    {
+      "matches": ["https://*.x.com/*", "https://x.com/*", "https://*.twitter.com/*", "https://twitter.com/*"],
+      "js": ["account-data.js", "settings.js", "index.js"]
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "description": "Block users on Twitter in one click instead of 3. Block from any page where users are listed (/retweets, /followers, etc)!",
+  "icons": {
+    "48": "images/one-click-blocker.png"
+  },
+  "manifest_version": 3,
+  "name": "1-click blocker for Twitter",
+  "offline_enabled": true,
+  "short_name": "Twitter 1-click blocker",
+  "version": "2.0.0"
+}

@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>1-click blocker for Twitter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="app" id="settings-app">
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark" id="brand-mark-icon">
+          <img src="images/one-click-blocker.png" alt="" width="36" height="36" decoding="async">
+        </div>
+        <div>
+          <div class="brand-name">1-click blocker</div>
+          <div class="brand-tag">for Twitter</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <div class="nav-label">Moderation</div>
+        <button type="button" class="nav-item active" data-tab="settings">
+          <span class="nav-ico" data-icon="gear"></span>
+          <span class="label">Settings</span>
+        </button>
+        <button type="button" class="nav-item" data-tab="queue">
+          <span class="nav-ico" data-icon="queue"></span>
+          <span class="label">To Block</span>
+          <span class="nav-count tnum" id="nav-count-queue" hidden>0</span>
+          <span class="nav-dot" id="nav-queue-live" hidden title="Queue in progress"></span>
+        </button>
+        <button type="button" class="nav-item" data-tab="blocked">
+          <span class="nav-ico" data-icon="block"></span>
+          <span class="label">Blocked</span>
+          <span class="nav-count tnum" id="nav-count-blocked" hidden>0</span>
+        </button>
+        <button type="button" class="nav-item" data-tab="muted">
+          <span class="nav-ico" data-icon="mute"></span>
+          <span class="label">Muted</span>
+          <span class="nav-count tnum" id="nav-count-muted" hidden>0</span>
+        </button>
+        <div class="nav-label">Account</div>
+        <button type="button" class="nav-item" data-tab="stats">
+          <span class="nav-ico" data-icon="stats"></span>
+          <span class="label">Statistics</span>
+        </button>
+        <button type="button" class="nav-item" data-tab="backup">
+          <span class="nav-ico" data-icon="backup"></span>
+          <span class="label">Backup &amp; Restore</span>
+        </button>
+      </nav>
+
+      <div class="nav-foot">
+        <div class="theme-toggle" role="group" aria-label="Theme">
+          <button type="button" id="theme-light" data-theme="light"></button>
+          <button type="button" id="theme-dark" class="on" data-theme="dark"></button>
+        </div>
+        <div class="nav-foot-tools">
+          <button type="button" class="acct" id="sidebar-account" disabled>
+            <div class="avatar sm" id="sidebar-avatar">?</div>
+            <div class="acct-meta">
+              <div class="acct-name" id="sidebar-handle">@—</div>
+              <div class="acct-role">Active workspace</div>
+            </div>
+          </button>
+          <button type="button" class="btn-icon" id="storage-debug-open" title="View extension storage" aria-label="View extension storage"></button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <div class="mobile-bar">
+        <button type="button" class="btn-icon" id="sidebar-open" aria-label="Open menu"></button>
+        <div class="brand-mark brand-mark-sm" id="mobile-brand-icon">
+          <img src="images/one-click-blocker.png" alt="" width="28" height="28" decoding="async">
+        </div>
+        <b>1-click blocker</b>
+      </div>
+
+      <div class="main-scroll">
+        <!-- To Block -->
+        <div id="queue" class="page tab-panel fade-in">
+          <div class="queue-sticky-head">
+            <div class="page-head">
+              <div class="page-eyebrow">Work queue</div>
+              <h1 class="page-title">To Block</h1>
+              <p class="page-sub">Add accounts to a queue, then block or mute them automatically. Import a JSON backup or CSV. The extension opens each profile in the background and processes the list one account at a time.</p>
+            </div>
+            <div id="queue-staged-section" class="queue-staged-section" hidden>
+              <div class="queue-staged-head">
+                <h3 class="queue-staged-title">Saved queues</h3>
+                <p class="queue-staged-desc muted">Each paste or import is saved here. <b>Set as active queue</b> loads that queue below and puts your current active queue back in this list so you can switch again.</p>
+              </div>
+              <div id="queue-staged-list" class="queue-staged-list"></div>
+              <div class="queue-staged-actions">
+                <button type="button" class="btn btn-sm btn-primary" id="queue-staged-add-btn"><span data-btn-icon="plus"></span>Add</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="queue-staged-merge" disabled>Merge into active queue</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="queue-staged-select-all">Select all</button>
+              </div>
+            </div>
+            <div id="queue-empty">
+              <input type="file" id="queue-import-file" accept=".json,.csv,application/json,text/csv" hidden>
+              <div class="dropzone" id="queue-dropzone">
+                <div class="dz-ico"><span data-drop-icon="upload"></span></div>
+                <div class="empty-title">Import a list to get started</div>
+                <div class="empty-sub" style="margin:7px auto 0">Use <b>Add</b> to import a file or paste handles and profile links. Each batch becomes a staged queue you can merge into the active queue.</div>
+                <div class="mt18"><button type="button" class="btn btn-primary" id="queue-empty-add-btn"><span data-btn-icon="plus"></span>Add</button></div>
+              </div>
+            </div>
+            <div id="queue-content" hidden>
+              <div id="queue-launch" class="launch"></div>
+              <div id="queue-hero" class="hero" hidden></div>
+              <div id="queue-toolbar" class="list-toolbar"></div>
+              <div id="queue-active-label" class="queue-active-label" hidden>Active queue</div>
+              <div id="queue-select-all" class="row-gap" style="padding:2px 14px 12px;color:var(--text-2);font-size:13px" hidden></div>
+            </div>
+          </div>
+          <div id="queue-list-section" hidden>
+            <div id="queue-users-list"></div>
+            <div id="queue-bulkbar" class="bulkbar" hidden></div>
+          </div>
+        </div>
+
+        <!-- Settings -->
+        <div id="settings" class="page tab-panel active fade-in">
+          <div class="page-head">
+            <div class="page-eyebrow">Configuration</div>
+            <h1 class="page-title">Settings</h1>
+          </div>
+
+          <div class="section">
+            <div class="section-head bordered">
+              <h3 class="section-title"><span data-section-icon="user"></span>Your Twitter account</h3>
+              <p class="section-desc">Block and mute lists are stored per handle. Auto-detected when you visit Twitter.</p>
+            </div>
+            <div class="section-body">
+              <div class="spread" style="gap:14px;flex-wrap:wrap">
+                <div class="input-prefix" style="flex:1;min-width:240px">
+                  <span class="pfx">@</span>
+                  <input type="text" id="active-account-input" class="input" autocomplete="off" spellcheck="false" placeholder="your_handle">
+                </div>
+                <button type="button" class="btn btn-primary" id="save-account-handle"><span data-btn-icon="check"></span>Save handle</button>
+              </div>
+              <div class="row-gap mt14" style="font-size:13px;color:var(--text-2)">
+                <span>Currently managing lists for <b style="color:var(--text)" id="account-display-handle">@—</b></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <h3 class="section-title"><span data-section-icon="sliders"></span>Default action</h3>
+              <p class="section-desc">What a single click does on the injected button.</p>
+            </div>
+            <div class="section-body">
+              <div class="seg lg" id="action-seg" role="group" aria-label="Default action">
+                <button type="button" data-value="block" class="on accent"><span data-seg-icon="block"></span>Block</button>
+                <button type="button" data-value="mute"><span data-seg-icon="mute"></span>Mute</button>
+              </div>
+              <div class="field-help mt8" id="action-help">One click blocks the account immediately.</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <h3 class="section-title"><span data-section-icon="eye"></span>Interface</h3>
+              <p class="section-desc">Small conveniences on Twitter itself.</p>
+            </div>
+            <div class="section-body">
+              <div class="field-row" style="padding-top:0">
+                <div>
+                  <div class="field-label">Show settings shortcut on Twitter</div>
+                  <div class="field-help">Adds a small icon to Twitter pages that opens this control center in a new tab.</div>
+                </div>
+                <button type="button" class="switch on" id="show-settings-icon" aria-pressed="true"></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <div class="spread">
+                <div>
+                  <h3 class="section-title" id="page-count-title"><span data-section-icon="compass"></span>Show button on <span class="muted tnum" id="page-enabled-count">· 0/12</span></h3>
+                  <p class="section-desc">Pick the Twitter surfaces where the one-click button appears. Saves instantly.</p>
+                </div>
+                <button type="button" class="btn btn-sm btn-quiet" id="toggle-all-pages">Enable all</button>
+              </div>
+            </div>
+            <div class="section-body">
+              <div class="chip-grid" id="page-chips"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Blocked -->
+        <div id="blocked" class="page tab-panel fade-in">
+          <div class="page-head">
+            <div class="page-eyebrow">Completed ledger</div>
+            <h1 class="page-title">Blocked <span class="muted tnum" id="blocked-title-count" style="font-size:20px;font-weight:500">0</span></h1>
+            <p class="page-sub">Accounts this extension has blocked on <b id="blocked-account-label">@—</b>.</p>
+          </div>
+          <div id="blocked-toolbar" class="list-toolbar" hidden>
+            <div class="search">
+              <span data-search-icon="search"></span>
+              <input type="search" class="input" id="blocked-search" placeholder="Search handles…" autocomplete="off">
+            </div>
+          </div>
+          <div id="blocked-users-list"></div>
+        </div>
+
+        <!-- Muted -->
+        <div id="muted" class="page tab-panel fade-in">
+          <div class="page-head">
+            <div class="page-eyebrow">Completed ledger</div>
+            <h1 class="page-title">Muted <span class="muted tnum" id="muted-title-count" style="font-size:20px;font-weight:500">0</span></h1>
+            <p class="page-sub">Accounts this extension has muted on <b id="muted-account-label">@—</b>.</p>
+          </div>
+          <div id="muted-toolbar" class="list-toolbar" hidden>
+            <div class="search">
+              <span data-search-icon="search"></span>
+              <input type="search" class="input" id="muted-search" placeholder="Search handles…" autocomplete="off">
+            </div>
+          </div>
+          <div id="muted-users-list"></div>
+        </div>
+
+        <!-- Statistics -->
+        <div id="stats" class="page tab-panel fade-in">
+          <div class="page-head">
+            <div class="page-eyebrow">Insights</div>
+            <h1 class="page-title">Statistics</h1>
+            <p class="page-sub">Actions completed through the extension. Counts increment when a block or mute succeeds. They do not pull from Twitter's API.</p>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="ico" style="background:var(--accent-soft);color:var(--accent)"><span data-stat-icon="block"></span></div>
+              <div class="big tnum" id="total-blocks">0</div>
+              <div class="cap"><span>Total blocks</span> <span class="trend"><span data-trend-icon="trend"></span> all time</span></div>
+            </div>
+            <div class="stat-card">
+              <div class="ico" style="background:var(--warn-soft);color:var(--warn)"><span data-stat-icon="mute"></span></div>
+              <div class="big tnum" id="total-mutes">0</div>
+              <div class="cap"><span>Total mutes</span> <span class="trend"><span data-trend-icon="trend"></span> all time</span></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <h3 class="section-title"><span data-section-icon="queue"></span>Queue runs</h3>
+              <p class="section-desc">History of queue runs from the To Block tab, with start time, end time, and outcome counts.</p>
+            </div>
+            <div class="section-body" style="padding-top:0" id="queue-run-history"></div>
+          </div>
+        </div>
+
+        <!-- Backup -->
+        <div id="backup" class="page tab-panel fade-in">
+          <div class="page-head">
+            <div class="page-eyebrow">Safety &amp; migration</div>
+            <h1 class="page-title">Backup &amp; Restore</h1>
+            <p class="page-sub">Export your data as JSON, restore it on another machine, or reset. Pick which categories each action applies to.</p>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <h3 class="section-title"><span data-section-icon="sliders"></span>Choose categories</h3>
+              <p class="section-desc">Shared selection for export, import and reset below.</p>
+            </div>
+            <div class="section-body" style="padding-top:0">
+              <div class="rows" id="backup-scopes">
+                <button type="button" class="row sel" data-scope="blocks">
+                  <span class="check on" data-check></span>
+                  <span class="chip-ico" style="background:var(--accent);color:#fff"><span data-scope-icon="block"></span></span>
+                  <span class="row-stack">
+                    <span style="font-weight:600;font-size:14.5px">Blocked users</span>
+                    <span class="row-sub" id="backup-desc-blocks">0 accounts</span>
+                  </span>
+                </button>
+                <button type="button" class="row sel" data-scope="mutes">
+                  <span class="check on" data-check></span>
+                  <span class="chip-ico" style="background:var(--accent);color:#fff"><span data-scope-icon="mute"></span></span>
+                  <span class="row-stack">
+                    <span style="font-weight:600;font-size:14.5px">Muted users</span>
+                    <span class="row-sub" id="backup-desc-mutes">0 accounts</span>
+                  </span>
+                </button>
+                <button type="button" class="row sel" data-scope="settings">
+                  <span class="check on" data-check></span>
+                  <span class="chip-ico" style="background:var(--accent);color:#fff"><span data-scope-icon="gear"></span></span>
+                  <span class="row-stack">
+                    <span style="font-weight:600;font-size:14.5px">Settings &amp; preferences</span>
+                    <span class="row-sub">Default action, enabled pages, handle</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-body" style="display:flex;gap:11px;flex-wrap:wrap;align-items:center">
+              <button type="button" class="btn btn-primary" id="export-data"><span data-btn-icon="download"></span>Export data</button>
+              <button type="button" class="btn btn-ghost" id="import-data"><span data-btn-icon="upload"></span>Import data</button>
+              <span style="flex:1"></span>
+              <button type="button" class="btn btn-danger-soft" id="clear-data"><span data-btn-icon="trash"></span>Reset selected</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <div class="scrim hidden" id="clear-confirm-scrim" role="dialog" aria-modal="true" aria-labelledby="clear-modal-title">
+    <div class="modal">
+      <div class="modal-body">
+        <div class="modal-ico" style="background:var(--danger-soft);color:var(--danger)"><span data-modal-icon="trash"></span></div>
+        <div class="modal-title" id="clear-modal-title">Reset selected data?</div>
+        <div class="modal-text" id="clear-modal-text">This permanently clears the selected categories on this device. Export a backup first if you're not sure.</div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="clear-cancel">Keep it</button>
+        <button type="button" class="btn btn-danger" id="clear-confirm">Reset data</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="scrim hidden" id="storage-debug-overlay" role="dialog" aria-labelledby="storage-debug-title" aria-modal="true">
+    <div class="storage-debug-panel">
+      <div class="storage-debug-header">
+        <h2 id="storage-debug-title">Extension storage</h2>
+        <button type="button" class="storage-debug-close" id="storage-debug-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="storage-debug-body" id="storage-debug-body"></div>
+    </div>
+  </div>
+
+  <input type="file" id="import-file" accept="application/json" hidden>
+
+  <div class="scrim hidden" id="queue-add-scrim" role="dialog" aria-modal="true" aria-labelledby="queue-add-title">
+    <div class="modal queue-add-modal">
+      <div id="queue-add-menu">
+        <div class="modal-body">
+          <div class="modal-title" id="queue-add-title">Add to queue</div>
+          <div class="modal-text">Import a file or paste handles and X profile links. Each batch is saved as its own staged queue.</div>
+        </div>
+        <div class="queue-add-options">
+          <button type="button" class="queue-add-option" id="queue-add-choose-paste">
+            <span class="chip-ico" data-add-opt-icon="ext"></span>
+            <span class="row-stack">
+              <span style="font-weight:600;font-size:14.5px">Paste handles or links</span>
+              <span class="row-sub">@handle or https://x.com/handle. Enter after each</span>
+            </span>
+          </button>
+          <button type="button" class="queue-add-option" id="queue-add-choose-import">
+            <span class="chip-ico" data-add-opt-icon="upload"></span>
+            <span class="row-stack">
+              <span style="font-weight:600;font-size:14.5px">Import file</span>
+              <span class="row-sub"><span class="mono">.json</span> backup export or <span class="mono">.csv</span> of handles</span>
+            </span>
+          </button>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-ghost" id="queue-add-cancel">Cancel</button>
+        </div>
+      </div>
+      <div id="queue-add-paste" hidden>
+        <div class="modal-body">
+          <button type="button" class="btn btn-quiet btn-sm" id="queue-add-paste-back" style="margin-bottom:12px;padding-left:0">← Back</button>
+          <div class="modal-title">Paste handles</div>
+          <div class="modal-text">Press Enter after each handle or link. Paste multiple lines at once.</div>
+          <div id="queue-paste-tags" class="queue-paste-tags"></div>
+          <input type="text" id="queue-paste-input" class="input queue-paste-input" placeholder="dara_tobi or https://x.com/dara_tobi" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="modal-foot queue-paste-foot">
+          <button type="button" class="btn btn-ghost" id="queue-paste-clear-draft">Clear</button>
+          <button type="button" class="btn btn-ghost" id="queue-paste-add-active">Add to active queue</button>
+          <button type="button" class="btn btn-primary" id="queue-paste-save-staged"><span data-btn-icon="queue"></span>Save as new queue</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="scrim hidden" id="clear-queue-scrim" role="dialog" aria-modal="true" aria-labelledby="clear-queue-modal-title">
+    <div class="modal">
+      <div class="modal-body">
+        <div class="modal-ico" style="background:var(--danger-soft);color:var(--danger)"><span data-modal-icon="trash"></span></div>
+        <div class="modal-title" id="clear-queue-modal-title">Clear the entire to-block queue?</div>
+        <div class="modal-text">This removes all queued accounts and their not-found tags. It does not undo anything already blocked or muted.</div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="clear-queue-cancel">Keep queue</button>
+        <button type="button" class="btn btn-danger" id="clear-queue-confirm">Clear queue</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="account-data.js"></script>
+  <script src="options-icons.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

@@ -58,6 +58,10 @@ class TwitterBlocker {
     this._toBlockQueueHandled = null;
     this._queueRunAborted = false;
     this._queueStepComplete = false;
+    const launchParams = new URLSearchParams(location.search);
+    this._fromToBlockStandaloneSession =
+      launchParams.get('toblock') === '1' &&
+      !!(launchParams.get('block') || launchParams.get('mute'));
 
     // Initialize settings
     this.settingsManager = new window.OneClickBlockerSettings.SettingsManager();
@@ -68,6 +72,7 @@ class TwitterBlocker {
     this.initMessageListener();
     this.initQueueRunAbortListener();
     this.startHandleDetection();
+    void this.checkAutoBlockProfileTabState();
   }
 
   initQueueRunAbortListener() {
@@ -176,6 +181,10 @@ class TwitterBlocker {
       this.handleProfilePageBlockButton(mutation);
       void this.handleBlockCompletion(mutation);
       return;
+    }
+    if (this.isAutoBlockProfileTab()) {
+      if (await this.handleStandaloneAutoBlockAlreadyActioned(mutation)) return;
+      if (await this.handleStandaloneAutoBlockNotFound(mutation)) return;
     }
     this.handleConfirmUserBlock(mutation);
     this.handleOptionsMenu(mutation);
@@ -551,9 +560,12 @@ class TwitterBlocker {
   }
 
   handleBlockError() {
-    chrome.runtime.sendMessage(
-      { type: "feedback", data: "something_went_wrong" }
-    );
+    chrome.runtime.sendMessage({
+      type: 'feedback',
+      data: 'something_went_wrong',
+      username: this.getProfileTabUsername(),
+      fromToBlock: this.isFromToBlockStandaloneSession()
+    });
   }
 
   handleGrokButtonOverlap(mutation) {
@@ -797,7 +809,8 @@ class TwitterBlocker {
           chrome.runtime.sendMessage({
             type: 'feedback',
             data: `${completedAction}_button_clicked`,
-            username
+            username,
+            fromToBlock: this.isFromToBlockStandaloneSession()
           });
           return;
         }
@@ -808,7 +821,13 @@ class TwitterBlocker {
   }
 
   isProfileUnavailable() {
-    return !!document.querySelector(CONFIG.selectors.emptyStateHeader);
+    if (document.querySelector(CONFIG.selectors.emptyStateHeader)) return true;
+    if (!document.querySelector(CONFIG.selectors.userActions) && this.checkForError()) return true;
+    return false;
+  }
+
+  isFromToBlockStandaloneSession() {
+    return !!this._fromToBlockStandaloneSession;
   }
 
   isAutoBlockProfileTab() {
@@ -872,9 +891,63 @@ class TwitterBlocker {
       data: 'already_actioned',
       username,
       action,
-      eventType
+      eventType,
+      fromToBlock: this.isFromToBlockStandaloneSession()
     });
     return true;
+  }
+
+  async handleStandaloneAutoBlockNotFound(mutation) {
+    const username = this.getProfileTabUsername();
+    if (!username) return false;
+
+    if (
+      this.isProfileUnavailable() &&
+      !this.hasProfileUnblockButton('block') &&
+      !document.querySelector(CONFIG.selectors.userActions)
+    ) {
+      if (!this.markToBlockQueueHandled(username, 'not_found')) return false;
+      this._skipProfileAutoBlock = true;
+      chrome.runtime.sendMessage({
+        type: 'feedback',
+        data: 'account_not_found',
+        username,
+        fromToBlock: this.isFromToBlockStandaloneSession()
+      });
+      return true;
+    }
+    return false;
+  }
+
+  async handleStandaloneAutoBlockAlreadyActioned(mutation) {
+    const username = this.getProfileTabUsername();
+    if (!username) return false;
+
+    const action = this.getProfileAutoBlockAction();
+
+    if (
+      !this._didAttemptAutoBlock &&
+      (this.hasProfileUnblockButton('block') || this.hasProfileUnblockButton('mute'))
+    ) {
+      return await this.handleAlreadyBlockedOnProfile(username, action);
+    }
+    return false;
+  }
+
+  async checkAutoBlockProfileTabState() {
+    if (!this.isAutoBlockProfileTab()) return;
+    const emptyMutation = { target: document.body, addedNodes: [] };
+    for (let i = 0; i < 24; i++) {
+      if (this._skipProfileAutoBlock || this._queueStepComplete) return;
+      if (this.isToBlockQueueProfileTab()) {
+        if (this._queueRunAborted) return;
+        if (await this.handleToBlockQueueProfilePage(emptyMutation)) return;
+      } else {
+        if (await this.handleStandaloneAutoBlockAlreadyActioned(emptyMutation)) return;
+        if (await this.handleStandaloneAutoBlockNotFound(emptyMutation)) return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
   }
 
   async handleToBlockQueueProfilePage(mutation) {
@@ -925,7 +998,12 @@ class TwitterBlocker {
       if (!this.markToBlockQueueHandled(username, 'not_found')) return false;
       this._skipProfileAutoBlock = true;
       this._queueStepComplete = true;
-      chrome.runtime.sendMessage({ type: 'feedback', data: 'account_not_found', username });
+      chrome.runtime.sendMessage({
+        type: 'feedback',
+        data: 'account_not_found',
+        username,
+        fromToBlock: this.isFromToBlockStandaloneSession()
+      });
       return true;
     }
 

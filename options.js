@@ -1684,7 +1684,8 @@ class OptionsManager {
       type: 'open_tab',
       username: normalized,
       [queueAction]: true,
-      mute: queueAction === 'mute'
+      mute: queueAction === 'mute',
+      toblock: true
     });
   }
 
