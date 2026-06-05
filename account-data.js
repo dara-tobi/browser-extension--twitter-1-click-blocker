@@ -464,8 +464,8 @@ function reassignAccountData(settings, newHandleRaw) {
     stats: {
       totalBlocks: 0,
       totalMutes: 0,
-      blockedUsers: mergeUsers(oldData.stats.blockedUsers, existingNew.stats.blockedUsers),
-      mutedUsers: mergeUsers(oldData.stats.mutedUsers, existingNew.stats.mutedUsers)
+      blockedUsers: mergeLedgerUsers(oldData.stats.blockedUsers, existingNew.stats.blockedUsers),
+      mutedUsers: mergeLedgerUsers(oldData.stats.mutedUsers, existingNew.stats.mutedUsers)
     },
     toBlockUsers: mergeUsers(oldData.toBlockUsers, existingNew.toBlockUsers),
     toBlockNotFoundUsers: mergeUsers(oldData.toBlockNotFoundUsers, existingNew.toBlockNotFoundUsers),
@@ -727,10 +727,42 @@ async function saveToChromeStorage(settings) {
 }
 
 function listUsernameKey(raw) {
+  if (raw && typeof raw === 'object') {
+    const fromEntry = normalizeHandle(raw.handle);
+    if (fromEntry) return fromEntry;
+    const s = String(raw.handle || '').trim().replace(/^@/, '').toLowerCase();
+    return s || null;
+  }
   const fromHandle = normalizeHandle(raw);
   if (fromHandle) return fromHandle;
   const s = String(raw).trim().replace(/^@/, '').toLowerCase();
   return s || null;
+}
+
+function listUserAt(raw) {
+  if (raw && typeof raw === 'object' && typeof raw.at === 'number') return raw.at;
+  return null;
+}
+
+function mergeLedgerUsers(a, b) {
+  const byKey = new Map();
+  const order = [];
+  for (const u of [...(a || []), ...(b || [])]) {
+    const key = listUsernameKey(u);
+    if (!key) continue;
+    if (!byKey.has(key)) order.push(key);
+    const prev = byKey.get(key);
+    if (!prev) {
+      byKey.set(key, u);
+      continue;
+    }
+    const prevAt = listUserAt(prev);
+    const nextAt = listUserAt(u);
+    if (nextAt != null && (prevAt == null || nextAt >= prevAt)) {
+      byKey.set(key, u);
+    }
+  }
+  return order.map((key) => byKey.get(key));
 }
 
 function isOnBlockedOrMutedList(username, stats, queueAction = 'block') {
@@ -844,6 +876,8 @@ const AccountData = {
   filterUsernamesForToBlockQueue,
   isOnBlockedOrMutedList,
   listUsernameKey,
+  listUserAt,
+  mergeLedgerUsers,
   isToBlockNotFoundTagged,
   addToBlockNotFoundTag,
   removeToBlockNotFoundTag,

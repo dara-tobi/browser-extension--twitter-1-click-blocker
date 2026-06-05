@@ -380,7 +380,7 @@ async function openNextInToBlockQueue(expectedGen) {
   if (expectedGen !== undefined && expectedGen !== queueGeneration) return;
   if (!(await isQueueRunningInStorage())) return;
 
-  const url = `https://x.com/${username}?${queueAction}=true`;
+  const url = `https://x.com/${username}?${queueAction}=true&queueblock=1`;
   const tab = await chrome.tabs.create({
     url,
     active: false,

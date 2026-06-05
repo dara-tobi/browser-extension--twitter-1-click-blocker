@@ -71,14 +71,15 @@ class TwitterBlocker {
   }
 
   initQueueRunAbortListener() {
-    if (this.isToBlockQueueProfileTab()) {
-      chrome.storage.local.get('toBlockQueueRunning', (data) => {
-        this._queueRunAborted = data.toBlockQueueRunning !== true;
-      });
-    }
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local' || !changes.toBlockQueueRunning) return;
-      this._queueRunAborted = changes.toBlockQueueRunning.newValue === false;
+      if (!this.isToBlockQueueProfileTab()) return;
+      if (
+        changes.toBlockQueueRunning.oldValue === true &&
+        changes.toBlockQueueRunning.newValue === false
+      ) {
+        this._queueRunAborted = true;
+      }
     });
   }
 
@@ -170,6 +171,8 @@ class TwitterBlocker {
       if (this._queueRunAborted || this._queueStepComplete) return;
       const queueProfileHandled = await this.handleToBlockQueueProfilePage(mutation);
       if (queueProfileHandled) return;
+      this.handleConfirmUserBlock(mutation);
+      this.handleOptionsMenu(mutation);
       this.handleProfilePageBlockButton(mutation);
       void this.handleBlockCompletion(mutation);
       return;
@@ -218,6 +221,10 @@ class TwitterBlocker {
         confirmButton.click();
       }
     }
+
+    if (document.querySelector(CONFIG.selectors.userActions)) {
+      confirmButton.click();
+    }
   }
 
   handleOptionsMenu(mutation) {
@@ -231,10 +238,10 @@ class TwitterBlocker {
     menu.classList.add(CONFIG.classes.menu);
     if (this.isActionClicked) {
       const action = await this.getCurrentAction();
-      const actionButton = action === 'mute' ? 
-        this.getMuteButton() : 
+      const actionButton = action === 'mute' ?
+        this.getMuteButton() :
         document.querySelector(CONFIG.selectors.blockButton);
-      
+
       menu.style.opacity = actionButton ? 0 : 1;
       if (!actionButton) menu.remove();
     } else {
@@ -251,10 +258,10 @@ class TwitterBlocker {
 
     setTimeout(() => {
       if (this.hasProfileUnblockButton(action)) return;
-      const actionButton = action === 'mute' ? 
-        this.getMuteButton() : 
+      const actionButton = action === 'mute' ?
+        this.getMuteButton() :
         document.querySelector(CONFIG.selectors.blockButton);
-      
+
       this.isActionClicked = false;
       if (!actionButton) return;
       this._didAttemptAutoBlock = true;
@@ -334,7 +341,7 @@ class TwitterBlocker {
 
     // Check if we should show the button based on the current page type
     const pageType = this.getPageType();
-    if (!await this.shouldShowButtonOnPage(pageType)) {
+    if (!this.isAutoBlockProfileTab() && !await this.shouldShowButtonOnPage(pageType)) {
       return;
     }
 
@@ -527,8 +534,7 @@ class TwitterBlocker {
 
   async runAutoBlockIfNeeded(blockButton) {
     if (this._skipProfileAutoBlock) return;
-    const urlParams = new URLSearchParams(window.location.search);
-    if (!urlParams.get('block') && !urlParams.get('mute')) return;
+    if (!this.isAutoBlockProfileTab()) return;
 
     if (this.checkForError()) {
       this.handleBlockError();
@@ -769,7 +775,7 @@ class TwitterBlocker {
         // remove the @ from the username if present
         username = username.replace("@", "");
         const completedAction = fromAutoBlockTab
-          ? this.getQueueProfileAction()
+          ? this.getProfileAutoBlockAction()
           : (isBlocked ? 'block' : 'mute');
         if (fromAutoBlockTab) {
           this.markProfileActionDoneThisSession(completedAction);
@@ -805,9 +811,14 @@ class TwitterBlocker {
     return !!document.querySelector(CONFIG.selectors.emptyStateHeader);
   }
 
-  isToBlockQueueProfileTab() {
+  isAutoBlockProfileTab() {
     const urlParams = new URLSearchParams(window.location.search);
     return !!(urlParams.get('block') || urlParams.get('mute'));
+  }
+
+  isToBlockQueueProfileTab() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('queueblock') === '1' && this.isAutoBlockProfileTab();
   }
 
   getProfileTabUsername() {
@@ -817,9 +828,13 @@ class TwitterBlocker {
     return segment.replace('@', '');
   }
 
-  getQueueProfileAction() {
+  getProfileAutoBlockAction() {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get('mute') ? 'mute' : 'block';
+  }
+
+  getQueueProfileAction() {
+    return this.getProfileAutoBlockAction();
   }
 
   markToBlockQueueHandled(username, reason) {
@@ -877,7 +892,7 @@ class TwitterBlocker {
       this._toBlockQueueHandled = null;
     }
 
-    const action = this.getQueueProfileAction();
+    const action = this.getProfileAutoBlockAction();
 
     if (
       !this._didAttemptAutoBlock &&
@@ -926,14 +941,15 @@ class TwitterBlocker {
     };
     if (!s.blockedUsers) s.blockedUsers = [];
     if (!s.mutedUsers) s.mutedUsers = [];
+    const key = AccountData.listUsernameKey(username);
     if (action === 'block') {
-      if (!s.blockedUsers.includes(username)) {
-        s.blockedUsers.push(username);
+      if (!s.blockedUsers.some((u) => AccountData.listUsernameKey(u) === key)) {
+        s.blockedUsers.push({ handle: key || username, at: Date.now() });
         s.totalBlocks = (s.totalBlocks || 0) + 1;
       }
     } else if (action === 'mute') {
-      if (!s.mutedUsers.includes(username)) {
-        s.mutedUsers.push(username);
+      if (!s.mutedUsers.some((u) => AccountData.listUsernameKey(u) === key)) {
+        s.mutedUsers.push({ handle: key || username, at: Date.now() });
         s.totalMutes = (s.totalMutes || 0) + 1;
       }
     }

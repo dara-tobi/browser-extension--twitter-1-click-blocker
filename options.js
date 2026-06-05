@@ -1488,7 +1488,8 @@ class OptionsManager {
     const seen = new Set();
     const usernames = [];
     for (const item of rawList) {
-      const username = this.normalizeUsername(typeof item === 'string' ? item : String(item));
+      const raw = typeof item === 'string' ? item : (item && typeof item === 'object' && item.handle ? item.handle : String(item));
+      const username = this.normalizeUsername(raw);
       if (username) {
         const key = username.toLowerCase();
         if (!seen.has(key)) {
@@ -1789,10 +1790,25 @@ class OptionsManager {
     this.toast(`Lists now saved for <b>@${updated.activeAccount}</b>`, { kind: 'success' });
   }
 
+  formatActionAgo(at) {
+    const sec = Math.max(0, Math.floor((Date.now() - at) / 1000));
+    if (sec < 60) return 'just now';
+    const min = Math.floor(sec / 60);
+    if (min < 60) return min === 1 ? '1 minute ago' : `${min} minutes ago`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return hr === 1 ? '1 hour ago' : `${hr} hours ago`;
+    const day = Math.floor(hr / 24);
+    if (day < 30) return day === 1 ? '1 day ago' : `${day} days ago`;
+    const month = Math.floor(day / 30);
+    if (month < 12) return month === 1 ? '1 month ago' : `${month} months ago`;
+    const year = Math.floor(day / 365);
+    return year === 1 ? '1 year ago' : `${year} years ago`;
+  }
+
   filterUsers(users, q) {
     if (!q) return users;
     const lower = q.toLowerCase();
-    return users.filter(u => u.toLowerCase().includes(lower));
+    return users.filter((u) => (AccountData.listUsernameKey(u) || '').includes(lower));
   }
 
   renderUserList(containerId, users, kind) {
@@ -1820,7 +1836,13 @@ class OptionsManager {
     if (toolbar) toolbar.hidden = false;
 
     let shown = this.filterUsers(users, q);
-    shown = [...shown].reverse();
+    shown = [...shown].sort((a, b) => {
+      const idxA = users.indexOf(a);
+      const idxB = users.indexOf(b);
+      const keyA = AccountData.listUserAt(a) ?? idxA;
+      const keyB = AccountData.listUserAt(b) ?? idxB;
+      return keyB - keyA;
+    });
 
     if (!shown.length) {
       list.innerHTML = `<div class="empty">
@@ -1832,15 +1854,20 @@ class OptionsManager {
     }
 
     list.innerHTML = `<div class="rows">${shown.map(user => {
-      const a = avatarFor(user);
-      return `<a class="row row-link" href="https://twitter.com/${this.escapeHtml(user)}" target="_blank" rel="noopener">
+      const handle = AccountData.listUsernameKey(user) || user;
+      const at = AccountData.listUserAt(user);
+      const a = avatarFor(handle);
+      const sub = at != null
+        ? `${isBlocked ? 'Blocked' : 'Muted'} ${this.formatActionAgo(at)}`
+        : `${isBlocked ? 'Blocked' : 'Muted'} via extension`;
+      return `<a class="row row-link" href="https://twitter.com/${this.escapeHtml(handle)}" target="_blank" rel="noopener">
         <div class="avatar sm" style="background:${a.grad}">${a.initial}</div>
         <div class="row-stack">
           <div class="row-handle">
-            <span class="h">@${this.escapeHtml(user)}</span>
+            <span class="h">@${this.escapeHtml(handle)}</span>
             ${icon('ext', 13, 'var(--text-3)')}
           </div>
-          <div class="row-sub">${isBlocked ? 'Blocked' : 'Muted'} via extension</div>
+          <div class="row-sub">${sub}</div>
         </div>
       </a>`;
     }).join('')}</div>`;
