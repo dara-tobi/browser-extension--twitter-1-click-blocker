@@ -247,9 +247,7 @@ class TwitterBlocker {
     menu.classList.add(CONFIG.classes.menu);
     if (this.isActionClicked) {
       const action = await this.getCurrentAction();
-      const actionButton = action === 'mute' ?
-        this.getMuteButton() :
-        document.querySelector(CONFIG.selectors.blockButton);
+      const actionButton = this.getMenuActionButton(action, menu);
 
       menu.style.opacity = actionButton ? 0 : 1;
       if (!actionButton) menu.remove();
@@ -262,14 +260,27 @@ class TwitterBlocker {
     return document.querySelector(CONFIG.selectors.muteButton);
   }
 
+  getMenuActionButton(action, menu) {
+    const selector = action === 'mute' ? CONFIG.selectors.muteButton : CONFIG.selectors.blockButton;
+    const activeMenu = menu || document.querySelector(`[role="menu"].${CONFIG.classes.menu}`);
+    if (activeMenu) {
+      const button = activeMenu.querySelector(selector);
+      if (button) return button;
+    }
+    return action === 'mute' ? this.getMuteButton() : document.querySelector(CONFIG.selectors.blockButton);
+  }
+
   async triggerMenuOptionClick() {
     const action = await this.getCurrentAction();
 
     setTimeout(() => {
-      if (this.hasProfileUnblockButton(action)) return;
-      const actionButton = action === 'mute' ?
-        this.getMuteButton() :
-        document.querySelector(CONFIG.selectors.blockButton);
+      if (
+        this.getProfilePageInfo().isProfilePage &&
+        this.hasProfileUnblockButton(action)
+      ) {
+        return;
+      }
+      const actionButton = this.getMenuActionButton(action);
 
       this.isActionClicked = false;
       if (!actionButton) return;
@@ -676,7 +687,12 @@ class TwitterBlocker {
   }
 
   async attachActionButton(userNameDiv, menuOptionsButton) {
-    if (!userNameDiv) {
+    if (!userNameDiv || !menuOptionsButton) {
+      return;
+    }
+
+    const menuOptionsWrapper = menuOptionsButton.parentElement;
+    if (menuOptionsWrapper?.querySelector(`.${CONFIG.classes.blockButtonWrapper}`)) {
       return;
     }
 
@@ -691,9 +707,8 @@ class TwitterBlocker {
     const blockButton = new BlockButtonUI(bgColor, iconColor)
       .create(tweetUsername, menuOptionsButton, action);
     
-    this.addTweetActionButtonListeners(blockButton, menuOptionsButton);
+    this.addTweetActionButtonListeners(blockButton);
     
-    const menuOptionsWrapper = menuOptionsButton.parentElement;
     menuOptionsWrapper.insertBefore(blockButton, menuOptionsButton);
 
     const grokButton = menuOptionsWrapper.closest('article')
@@ -709,10 +724,12 @@ class TwitterBlocker {
     return tweetUsername.replace(/^@/, '').toLowerCase() !== ownHandle;
   }
 
-  addTweetActionButtonListeners(actionButton, menuOptionsButton) {
+  addTweetActionButtonListeners(actionButton) {
     actionButton.addEventListener("click", async (e) => {
       this.usernameToAction = actionButton.dataset.username;
       e.stopPropagation();
+      const menuOptionsButton = actionButton.parentElement?.querySelector(CONFIG.selectors.menuCaret);
+      if (!menuOptionsButton) return;
       this.triggerMenuClick(menuOptionsButton);
       await this.triggerMenuOptionClick();
     });
@@ -764,8 +781,9 @@ class TwitterBlocker {
       .map(node => node.outerHTML)
       .join("");
 
-    // Check for block/mute completion message
-    const isBlocked = mutationString.includes("blocked");
+    // Check for block/mute completion message (ignore blocked-account quote placeholders)
+    const isBlockedUserContentMessage = mutationString.includes("account you blocked");
+    const isBlocked = mutationString.includes("blocked") && !isBlockedUserContentMessage;
     const isMuted = mutationString.includes("muted");
     
     if (isBlocked || isMuted) {
