@@ -16,6 +16,29 @@ const DEFAULT_ACCOUNT_DATA = {
   queueRunHistory: []
 };
 
+const DEFAULT_SETTINGS = {
+  action: 'block', // 'block' or 'mute'
+  enabledPages: {
+    timeline: true,
+    followers: true,
+    following: true,
+    search: true,
+    communities: true,
+    engagements: true,
+    status: true,
+    hashtag: true,
+    trending: true,
+    notifications: true,
+    profile: true,
+    explore: true
+  },
+  showSettingsIcon: true,
+  accounts: {},
+  activeAccount: '_unassigned',
+  detectedAccount: null,
+  _migratedToAccounts: false
+};
+
 const RESERVED_PATH_SEGMENTS = new Set([
   'home', 'search', 'explore', 'notifications', 'messages', 'i', 'settings',
   'compose', 'login', 'logout', 'signup', 'intent', 'share', 'hashtag'
@@ -281,7 +304,7 @@ function migrateSettings(settings, detectedHandle) {
   const handle = normalizeHandle(detectedHandle);
   migrated.accounts = migrated.accounts || {};
 
-  if (!migrated._migratedToAccounts && hasLegacyRootListData(migrated)) {
+  if (hasLegacyRootListData(migrated)) {
     const targetKey = handle || migrated.activeAccount || '_unassigned';
     if (!migrated.accounts[targetKey]) {
       migrated.accounts[targetKey] = defaultAccountData();
@@ -303,30 +326,10 @@ function migrateSettings(settings, detectedHandle) {
     }
     stripLegacyRootListFields(migrated);
     migrated.activeAccount = targetKey;
-    migrated._migratedToAccounts = true;
   }
 
   if (!migrated._migratedToAccounts) {
     migrated._migratedToAccounts = true;
-  }
-
-  if (hasLegacyRootListData(migrated)) {
-    const targetKey = handle || migrated.activeAccount || '_unassigned';
-    if (!migrated.accounts[targetKey]) {
-      migrated.accounts[targetKey] = defaultAccountData();
-    }
-    const account = migrated.accounts[targetKey];
-    if (migrated.stats) {
-      account.stats = migrated.stats;
-    }
-    if (migrated.toBlockUsers?.length) {
-      account.toBlockUsers = migrated.toBlockUsers;
-    }
-    if (migrated.bulkQueueAction) {
-      account.bulkQueueAction = migrated.bulkQueueAction;
-    }
-    stripLegacyRootListFields(migrated);
-    migrated.activeAccount = targetKey;
   }
 
   if (handle) {
@@ -820,6 +823,7 @@ function switchActiveAccount(settings, handle) {
 
 const AccountData = {
   DEFAULT_ACCOUNT_DATA,
+  DEFAULT_SETTINGS,
   normalizeHandle,
   detectHandleFromPage,
   defaultAccountData,

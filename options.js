@@ -1,27 +1,3 @@
-// Default settings configuration
-const DEFAULT_SETTINGS = {
-  action: 'block',
-  enabledPages: {
-    timeline: true,
-    followers: true,
-    following: true,
-    search: true,
-    communities: true,
-    engagements: true,
-    status: true,
-    trending: true,
-    notifications: true,
-    hashtag: true,
-    profile: true,
-    explore: true
-  },
-  showSettingsIcon: true,
-  accounts: {},
-  activeAccount: '_unassigned',
-  detectedAccount: null,
-  _migratedToAccounts: false
-};
-
 const TOAST_ICONS = { success: 'check', danger: 'x', warn: 'alert', accent: 'info', default: 'info' };
 const TOAST_COLORS = {
   success: 'var(--success)',
@@ -93,7 +69,7 @@ function queueInProgressText(action) {
 class OptionsManager {
   constructor() {
     this.currentHandle = null;
-    this.currentTab = localStorage.getItem('ocb_route') || 'queue';
+    this.currentTab = localStorage.getItem('ocb_route') || 'settings';
     this.blockedSort = 'recent';
     this.mutedSort = 'recent';
     this.blockedSearch = '';
@@ -196,7 +172,7 @@ class OptionsManager {
   renderPageChips(enabledPages) {
     const grid = document.getElementById('page-chips');
     if (!grid) return;
-    const pages = enabledPages || DEFAULT_SETTINGS.enabledPages;
+    const pages = enabledPages || AccountData.DEFAULT_SETTINGS.enabledPages;
     grid.innerHTML = PAGE_TYPES.map(p => {
       const on = pages[p.id] ?? false;
       return `<button type="button" class="chip${on ? ' on' : ''}" data-page="${p.id}">
@@ -265,7 +241,7 @@ class OptionsManager {
   }
 
   async readStoredSettings(detectedHandle) {
-    let settings = await AccountData.loadFromChromeStorage(DEFAULT_SETTINGS);
+    let settings = await AccountData.loadFromChromeStorage(AccountData.DEFAULT_SETTINGS);
     settings = AccountData.migrateSettings(settings, detectedHandle);
     const handle = AccountData.normalizeHandle(detectedHandle);
     if (handle) {
@@ -345,7 +321,7 @@ class OptionsManager {
 
   async loadResolvedAccountFromStorage() {
     if (!this.currentHandle) return null;
-    let settings = await AccountData.loadFromChromeStorage(DEFAULT_SETTINGS);
+    let settings = await AccountData.loadFromChromeStorage(AccountData.DEFAULT_SETTINGS);
     settings = AccountData.migrateSettings(settings, this.currentHandle);
     settings = AccountData.switchActiveAccount(settings, this.currentHandle);
     return AccountData.resolveForActiveAccount(settings);
@@ -549,19 +525,14 @@ class OptionsManager {
     );
   }
 
-  emptyQueueRunStats() {
-    return { blocked: 0, muted: 0, notFound: 0, alreadyBlocked: 0, alreadyMuted: 0 };
-  }
-
   getQueueCounts() {
     const users = this._queueUsers || [];
-    const visible = this._showNotFound
-      ? users
-      : users.filter((u) => !this.isQueueNotFound(u));
+    const pending = users.filter((u) => !this.isQueueNotFound(u));
+    const visible = this._showNotFound ? users : pending;
     return {
       all: visible.length,
-      pending: visible.filter((u) => !this.isQueueNotFound(u)).length,
-      notfound: users.filter((u) => this.isQueueNotFound(u)).length
+      pending: pending.length,
+      notfound: users.length - pending.length
     };
   }
 
@@ -1477,27 +1448,8 @@ class OptionsManager {
   }
 
   showToBlockFeedback(event) {
-    if (!event?.username && event?.type !== 'run_complete') return;
-    if (this._queueRunning && event.type !== 'run_complete') return;
-    const messages = {
-      blocked: 'was blocked',
-      muted: 'was muted',
-      already_blocked: 'is already blocked',
-      already_muted: 'is already muted',
-      not_found: 'no longer exists',
-      try_again: 'timed out. Moved to the end of the queue.',
-      run_complete: UI_COPY.queue.finished
-    };
-    if (event.type === 'run_complete') {
-      this.toast(UI_COPY.queue.savedToStatisticsToast, { kind: 'accent', ttl: 3200 });
-      return;
-    }
-    const handle = AccountData.listUsernameKey(event.username) || event.username;
-    const msg = messages[event.type] || 'updated';
-    this.toast(`<b>@${handle}</b> ${msg}`, {
-      kind: event.type === 'not_found' ? 'warn' : (event.type === 'blocked' || event.type === 'muted' ? 'success' : 'accent'),
-      ttl: 1600
-    });
+    if (event?.type !== 'run_complete') return;
+    this.toast(UI_COPY.queue.savedToStatisticsToast, { kind: 'accent', ttl: 3200 });
   }
 
   async saveBulkQueueAction() {
@@ -1664,7 +1616,7 @@ class OptionsManager {
   }
 
   importToBlockUsers() {
-    const input = document.getElementById('queue-import-file-inline') || document.getElementById('queue-import-file');
+    const input = document.getElementById('queue-import-file');
     if (!input) return;
     input.value = '';
     input.onchange = async (e) => {
@@ -2193,7 +2145,7 @@ class OptionsManager {
 
     const accountLists = localAll[AccountData.ACCOUNT_LISTS_STORAGE_KEY] || {};
     const syncSettings = syncAll.settings || {};
-    const mergedSettings = await AccountData.loadFromChromeStorage({});
+    const mergedSettings = await AccountData.loadFromChromeStorage(AccountData.DEFAULT_SETTINGS);
 
     const userKeys = new Set([
       ...Object.keys(accountLists),
@@ -2374,8 +2326,8 @@ class OptionsManager {
       const scope = this.getBackupCheckboxes();
 
       if (scope.settings) {
-        settings.action = DEFAULT_SETTINGS.action;
-        settings.enabledPages = { ...DEFAULT_SETTINGS.enabledPages };
+        settings.action = AccountData.DEFAULT_SETTINGS.action;
+        settings.enabledPages = { ...AccountData.DEFAULT_SETTINGS.enabledPages };
         settings.showSettingsIcon = true;
       }
 

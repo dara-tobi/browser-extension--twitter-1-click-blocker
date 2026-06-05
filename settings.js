@@ -1,27 +1,3 @@
-// Default settings configuration
-const DEFAULT_SETTINGS = {
-    action: 'block', // 'block' or 'mute'
-    enabledPages: {
-        timeline: true,
-        followers: true,
-        following: true,
-        search: true,
-        communities: true,
-        engagements: true,
-        status: true,
-        hashtag: true,
-        trending: true,
-        notifications: true,
-        profile: true,
-        explore: true
-    },
-    showSettingsIcon: true,
-    accounts: {},
-    activeAccount: '_unassigned',
-    detectedAccount: null,
-    _migratedToAccounts: false
-};
-
 const THEME_ICON_COLORS = {
     "#000000": "rgb(113, 118, 123)",
     "#15202B": "rgb(139, 152, 165)",
@@ -77,14 +53,14 @@ function getThemeColors(contextElement) {
 
 class SettingsManager {
     constructor() {
-        this.settings = DEFAULT_SETTINGS;
+        this.settings = AccountData.DEFAULT_SETTINGS;
         this.resolvedSettings = null;
         this.loadSettings();
     }
 
     async loadSettings(detectedHandle, options = {}) {
         try {
-            let settings = await AccountData.loadFromChromeStorage(DEFAULT_SETTINGS);
+            let settings = await AccountData.loadFromChromeStorage(AccountData.DEFAULT_SETTINGS);
             settings = AccountData.migrateSettings(settings, detectedHandle);
             if (options.persist === true) {
                 await AccountData.saveToChromeStorage(settings);
@@ -94,7 +70,7 @@ class SettingsManager {
             return this.resolvedSettings;
         } catch (error) {
             console.error('Error loading settings:', error);
-            this.resolvedSettings = AccountData.resolveForActiveAccount(DEFAULT_SETTINGS);
+            this.resolvedSettings = AccountData.resolveForActiveAccount(AccountData.DEFAULT_SETTINGS);
             return this.resolvedSettings;
         }
     }
@@ -105,7 +81,7 @@ class SettingsManager {
             return this.loadSettings();
         }
         try {
-            let settings = await AccountData.loadFromChromeStorage(DEFAULT_SETTINGS);
+            let settings = await AccountData.loadFromChromeStorage(AccountData.DEFAULT_SETTINGS);
             settings = AccountData.migrateSettings(settings, handle);
             settings.detectedAccount = handle;
             if (!settings.accounts[handle]) {
@@ -130,7 +106,7 @@ class SettingsManager {
 
     async saveSettings(newSettings, detectedHandle) {
         try {
-            let settings = await AccountData.loadFromChromeStorage(DEFAULT_SETTINGS);
+            let settings = await AccountData.loadFromChromeStorage(AccountData.DEFAULT_SETTINGS);
             settings = AccountData.migrateSettings(
                 settings,
                 detectedHandle || settings.detectedAccount
@@ -180,7 +156,6 @@ class SettingsManager {
 class SettingsUI {
     constructor(settingsManager) {
         this.settingsManager = settingsManager;
-        this.isOpen = false;
         this.button = null;
         this.init();
     }
@@ -331,80 +306,15 @@ class SettingsUI {
         return wrapper;
     }
 
-    createSettingsPanel() {
-        const panel = document.createElement('div');
-        panel.className = 'one-click-blocker-settings-panel';
-        panel.style.display = 'none';
-
-        panel.innerHTML = `
-      <div class="settings-panel-header">One-Click Blocker Settings</div>
-      
-      <div class="settings-section">
-        <div class="settings-section-title">Default Action</div>
-        <div class="radio-group">
-          <label class="radio-option">
-            <input type="radio" name="action" value="block" ${this.settingsManager.settings.action === 'block' ? 'checked' : ''}>
-            Block
-          </label>
-          <label class="radio-option">
-            <input type="radio" name="action" value="mute" ${this.settingsManager.settings.action === 'mute' ? 'checked' : ''}>
-            Mute
-          </label>
-        </div>
-      </div>
-      
-      <div class="settings-section">
-        <div class="settings-section-title">Show Button On</div>
-        <div class="checkbox-group">
-          ${Object.entries(this.settingsManager.settings.enabledPages).map(([key, value]) => `
-            <label class="checkbox-option">
-              <input type="checkbox" name="pages" value="${key}" ${value ? 'checked' : ''}>
-              ${key.charAt(0).toUpperCase() + key.slice(1)}
-            </label>
-          `).join('')}
-        </div>
-      </div>
-    `;
-
-        // Add event listeners for settings changes
-        panel.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(input => {
-            input.addEventListener('change', () => this.saveSettings());
-        });
-
-        return panel;
-    }
-
-    toggleSettingsPanel() {
-        this.isOpen = !this.isOpen;
-        const panel = document.querySelector('.one-click-blocker-settings-panel');
-        panel.style.display = this.isOpen ? 'block' : 'none';
-    }
-
-    async saveSettings() {
-        const current = this.settingsManager.getSettings();
-        const newSettings = {
-            action: document.querySelector('input[name="action"]:checked').value,
-            enabledPages: Object.fromEntries(
-                Array.from(document.querySelectorAll('input[name="pages"]'))
-                    .map(checkbox => [checkbox.value, checkbox.checked])
-            ),
-            showSettingsIcon: current.showSettingsIcon
-        };
-
-        await this.settingsManager.saveSettings(newSettings);
-    }
-
     async mount() {
+        if (this.button) return;
         const settings = await this.settingsManager.loadSettings();
         if (settings.showSettingsIcon !== true) {
             return;
         }
 
         this.button = this.createSettingsButton();
-        const settingsPanel = this.createSettingsPanel();
-
         document.body.appendChild(this.button);
-        document.body.appendChild(settingsPanel);
     }
 
     unmount() {

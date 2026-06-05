@@ -26,15 +26,15 @@
 
       <nav class="nav">
         <div class="nav-label">Moderation</div>
-        <button type="button" class="nav-item active" data-tab="queue">
+        <button type="button" class="nav-item active" data-tab="settings">
+          <span class="nav-ico" data-icon="gear"></span>
+          <span class="label">Settings</span>
+        </button>
+        <button type="button" class="nav-item" data-tab="queue">
           <span class="nav-ico" data-icon="queue"></span>
           <span class="label">To Block</span>
           <span class="nav-count tnum" id="nav-count-queue" hidden>0</span>
           <span class="nav-dot" id="nav-queue-live" hidden title="Queue in progress"></span>
-        </button>
-        <button type="button" class="nav-item" data-tab="settings">
-          <span class="nav-ico" data-icon="gear"></span>
-          <span class="label">Settings</span>
         </button>
         <button type="button" class="nav-item" data-tab="blocked">
           <span class="nav-ico" data-icon="block"></span>
@@ -86,7 +86,7 @@
 
       <div class="main-scroll">
         <!-- To Block -->
-        <div id="queue" class="page tab-panel active fade-in">
+        <div id="queue" class="page tab-panel fade-in">
           <div class="queue-sticky-head">
             <div class="page-head">
               <div class="page-eyebrow">Work queue</div>
@@ -115,7 +115,6 @@
               </div>
             </div>
             <div id="queue-content" hidden>
-              <input type="file" id="queue-import-file-inline" accept=".json,.csv,application/json,text/csv" hidden>
               <div id="queue-launch" class="launch"></div>
               <div id="queue-hero" class="hero" hidden></div>
               <div id="queue-toolbar" class="list-toolbar"></div>
@@ -130,7 +129,7 @@
         </div>
 
         <!-- Settings -->
-        <div id="settings" class="page tab-panel fade-in">
+        <div id="settings" class="page tab-panel active fade-in">
           <div class="page-head">
             <div class="page-eyebrow">Configuration</div>
             <h1 class="page-title">Settings</h1>

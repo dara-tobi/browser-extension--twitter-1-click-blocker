@@ -11,10 +11,7 @@ const QUEUE_STORAGE_KEYS = [
   'toBlockQueueCurrentTabId',
   'toBlockQueueCurrentRunId',
   'toBlockQueueRunStartedAt',
-  'queueLastProgressAt',
-  'queueTabStartedAt',
-  'queueStallRetries',
-  'serviceWorkerMemorySamples'
+  'queueTabStartedAt'
 ];
 
 const QUEUE_RUN_HISTORY_LIMIT = 50;
@@ -48,7 +45,7 @@ async function resolveQueueAccountHandle(explicitHandle) {
 
 async function loadMigratedSettings(detectedHandle, persist = false) {
   const handle = await resolveQueueAccountHandle(detectedHandle);
-  let settings = await AccountData.loadFromChromeStorage({});
+  let settings = await AccountData.loadFromChromeStorage(AccountData.DEFAULT_SETTINGS);
   settings = AccountData.migrateSettings(settings, handle);
   if (handle) {
     settings = AccountData.switchActiveAccount(settings, handle);
@@ -147,8 +144,7 @@ async function clearQueueTabPointer() {
   await chrome.storage.local.remove([
     'toBlockQueueCurrentTabId',
     'toBlockQueueCurrentHandle',
-    'queueTabStartedAt',
-    'queueLastProgressAt'
+    'queueTabStartedAt'
   ]);
 }
 
