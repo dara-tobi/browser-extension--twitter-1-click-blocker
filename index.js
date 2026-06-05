@@ -768,7 +768,9 @@ class TwitterBlocker {
       if (username) {
         // remove the @ from the username if present
         username = username.replace("@", "");
-        const completedAction = isBlocked ? 'block' : 'mute';
+        const completedAction = fromAutoBlockTab
+          ? this.getQueueProfileAction()
+          : (isBlocked ? 'block' : 'mute');
         if (fromAutoBlockTab) {
           this.markProfileActionDoneThisSession(completedAction);
         }
@@ -877,13 +879,15 @@ class TwitterBlocker {
 
     const action = this.getQueueProfileAction();
 
-    if (this.hasProfileUnblockButton('block') || this.hasProfileUnblockButton('mute')) {
+    if (
+      !this._didAttemptAutoBlock &&
+      (this.hasProfileUnblockButton('block') || this.hasProfileUnblockButton('mute'))
+    ) {
       await this.handleAlreadyBlockedOnProfile(username, action);
       return true;
     }
 
     if (
-      this.isProfileActionDoneThisSession(action) &&
       this.hasProfileUnblockButton(action) &&
       (this.mutationHasProfileUnactionButton(mutation, action) || this._didAttemptAutoBlock)
     ) {
@@ -936,15 +940,21 @@ class TwitterBlocker {
     return s;
   }
 
+  async resolveContentScriptAccountHandle() {
+    const fromPage = this.getOwnHandle();
+    if (fromPage) return fromPage;
+    const { loggedInHandle } = await chrome.storage.local.get('loggedInHandle');
+    return AccountData.normalizeHandle(loggedInHandle);
+  }
+
   async saveQueueProfileStats(username, action) {
     try {
+      const handle = await this.resolveContentScriptAccountHandle();
+      if (!handle) return;
       await this.syncLoggedInAccount();
-      const settings = await this.settingsManager.loadSettings(this.getOwnHandle(), { persist: false });
+      const settings = await this.settingsManager.loadSettings(handle, { persist: false });
       const stats = this.recordActionInStats(settings.stats, username, action);
-      const handle = this.getOwnHandle();
-      if (handle) {
-        await AccountData.patchLocalAccountList(handle, { stats });
-      }
+      await AccountData.patchLocalAccountList(handle, { stats });
     } catch (error) {
       console.error('Error saving queue profile stats:', error);
     }

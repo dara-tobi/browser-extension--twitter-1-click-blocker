@@ -326,15 +326,21 @@ class OptionsManager {
   }
 
   async loadBlockedTabFromStorage() {
-    const resolved = await this.loadResolvedAccountFromStorage();
-    if (!resolved) return;
+    if (!this.currentHandle) return;
+    const settings = await this.readStoredSettings(this.currentHandle);
+    const resolved = AccountData.resolveForActiveAccount(settings);
     this.updateBlockedUsersList(resolved.stats?.blockedUsers || []);
+    this.updateNavCounts(resolved.stats?.blockedUsers?.length || 0, resolved.stats?.mutedUsers?.length || 0);
+    this.updateBackupDescs(resolved.stats?.blockedUsers?.length || 0, resolved.stats?.mutedUsers?.length || 0);
   }
 
   async loadMutedTabFromStorage() {
-    const resolved = await this.loadResolvedAccountFromStorage();
-    if (!resolved) return;
+    if (!this.currentHandle) return;
+    const settings = await this.readStoredSettings(this.currentHandle);
+    const resolved = AccountData.resolveForActiveAccount(settings);
     this.updateMutedUsersList(resolved.stats?.mutedUsers || []);
+    this.updateNavCounts(resolved.stats?.blockedUsers?.length || 0, resolved.stats?.mutedUsers?.length || 0);
+    this.updateBackupDescs(resolved.stats?.blockedUsers?.length || 0, resolved.stats?.mutedUsers?.length || 0);
   }
 
   async persistSettings(settings, opts = {}) {
@@ -1123,7 +1129,7 @@ class OptionsManager {
         <div class="launch-num tnum">${counts.pending}</div>
         <div>
           <div style="font-weight:600;font-size:15px">${UI_COPY.queue.readyAccounts(action.infinitive)}</div>
-          <div class="muted" style="font-size:13px">${counts.notfound > 0 ? `${UI_COPY.queue.flaggedNotFound(counts.notfound)} · ` : ''}</div>
+          <div class="muted" style="font-size:13px">${counts.notfound > 0 ? `${UI_COPY.queue.flaggedNotFound(counts.notfound)}` : ''}</div>
         </div>
       </div>
       <div class="row-gap">
@@ -1796,6 +1802,11 @@ class OptionsManager {
     const q = kind === 'blocked' ? this.blockedSearch : this.mutedSearch;
     const isBlocked = kind === 'blocked';
 
+    const searchInput = document.getElementById(kind === 'blocked' ? 'blocked-search' : 'muted-search');
+    if (searchInput) {
+      searchInput.placeholder = users.length ? `Search ${users.length} handles…` : 'Search handles…';
+    }
+
     if (!users.length) {
       if (toolbar) toolbar.hidden = true;
       list.innerHTML = `<div class="card"><div class="empty">
@@ -1807,10 +1818,6 @@ class OptionsManager {
     }
 
     if (toolbar) toolbar.hidden = false;
-    const searchInput = document.getElementById(kind === 'blocked' ? 'blocked-search' : 'muted-search');
-    if (searchInput && searchInput.placeholder !== `Search ${users.length} handles…`) {
-      searchInput.placeholder = `Search ${users.length} handles…`;
-    }
 
     let shown = this.filterUsers(users, q);
     shown = [...shown].reverse();
@@ -1869,14 +1876,23 @@ class OptionsManager {
       panel.classList.toggle('active', panel.id === tabId);
     });
     if (!opts.skipDataRefresh && tabId === 'queue') void this.refreshUIFromStorage();
+    if (!opts.skipDataRefresh && (tabId === 'settings' || tabId === 'backup')) void this.refreshUIFromStorage();
     if (tabId === 'blocked') void this.loadBlockedTabFromStorage();
     if (tabId === 'muted') void this.loadMutedTabFromStorage();
     if (tabId === 'stats') void this.loadStatsTabFromStorage();
   }
 
   async loadStatsTabFromStorage() {
-    const resolved = await this.loadResolvedAccountFromStorage();
-    if (!resolved) return;
+    if (!this.currentHandle) return;
+    const settings = await this.readStoredSettings(this.currentHandle);
+    const resolved = AccountData.resolveForActiveAccount(settings);
+    if (resolved.stats) {
+      const totalBlocks = document.getElementById('total-blocks');
+      const totalMutes = document.getElementById('total-mutes');
+      if (totalBlocks) totalBlocks.textContent = (resolved.stats.totalBlocks || 0).toLocaleString();
+      if (totalMutes) totalMutes.textContent = (resolved.stats.totalMutes || 0).toLocaleString();
+    }
+    this.updateNavCounts(resolved.stats?.blockedUsers?.length || 0, resolved.stats?.mutedUsers?.length || 0);
     this.renderQueueRunHistory(resolved);
   }
 
@@ -2294,7 +2310,7 @@ class OptionsManager {
 
   async clearData() {
     try {
-      let settings = await this.readStoredSettings(null);
+      let settings = await this.readStoredSettings(this.currentHandle);
       const account = AccountData.getAccount(settings, settings.activeAccount);
       const scope = this.getBackupCheckboxes();
 
@@ -2312,6 +2328,24 @@ class OptionsManager {
       };
 
       settings = AccountData.setAccount(settings, settings.activeAccount, account);
+
+      if (scope.blocks || scope.mutes) {
+        const accountLists = await AccountData.readLocalAccountLists();
+        const key = settings.activeAccount;
+        const existing = accountLists[key] || {};
+        accountLists[key] = {
+          ...existing,
+          stats: {
+            ...(existing.stats || {}),
+            totalBlocks: account.stats.totalBlocks,
+            totalMutes: account.stats.totalMutes,
+            blockedUsers: account.stats.blockedUsers,
+            mutedUsers: account.stats.mutedUsers
+          }
+        };
+        await AccountData.writeLocalAccountLists(accountLists);
+      }
+
       await this.persistSettings(settings);
 
       const names = [];
