@@ -533,3 +533,89 @@ h1,h2,h3,h4{font-family:var(--font-display);font-weight:600;letter-spacing:-.02e
 .nav-foot-tools{display:flex;gap:6px;align-items:center}
 .nav-foot-tools .btn-icon{margin-left:auto}
 #page-count-title .muted{font-weight:500;font-size:14px}
+
+/* sample tweet position preview */
+.tweet-position-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:20px;align-items:start}
+.sample-tweet{
+  background:#000;border:1px solid #2f3336;border-radius:16px;padding:14px 16px 12px;
+  position:relative;overflow:hidden;
+}
+.sample-tweet-inner{position:relative}
+.sample-tweet-head{display:grid;grid-template-columns:40px 1fr auto;grid-template-rows:auto auto;gap:0 12px;align-items:start;position:relative;margin-bottom:10px}
+.sample-tweet-avatar-col{
+  position:relative;width:40px;grid-row:span 2;align-self:stretch;
+}
+.sample-tweet-avatar{
+  width:40px;height:40px;border-radius:50%;
+  background:linear-gradient(145deg,#1d9bf0,#0e6fc0);
+}
+.sample-tweet-meta{min-width:0;padding-top:1px}
+.sample-tweet-name{font-size:15px;font-weight:700;color:#e7e9ea;line-height:1.2;display:flex;align-items:center;gap:4px}
+.sample-verified{
+  display:inline-block;width:16px;height:16px;border-radius:50%;
+  background:#1d9bf0;flex:none;
+}
+.sample-tweet-handle{font-size:15px;color:#71767b;margin-top:1px}
+.sample-tweet-head-actions{
+  display:flex;align-items:center;gap:2px;grid-column:3;grid-row:1;
+  color:#71767b;font-size:14px;
+}
+.sample-icon-btn{
+  width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  color:#71767b;font-weight:700;letter-spacing:1px;font-size:12px;
+}
+.sample-grok svg{width:18px;height:18px;fill:currentColor}
+.sample-block-btn{
+  width:33px;height:33px;border-radius:50%;
+  display:none;place-items:center;flex:none;
+  background:#000;border:0;pointer-events:none;
+}
+.sample-block-icon{
+  width:16px;height:16px;border-radius:50%;
+  box-shadow:inset 0 0 0 2.5px #71767b;
+  position:relative;display:block;
+}
+.sample-block-icon::after{
+  content:"";position:absolute;inset:2px;
+  background:linear-gradient(135deg,transparent 46%,#71767b 46%,#71767b 54%,transparent 54%);
+}
+.sample-tweet-text{color:#e7e9ea;font-size:15px;line-height:1.35;margin-bottom:12px;padding-left:52px}
+.sample-tweet-actions-wrap{padding-right:4px}
+.sample-tweet-actions-row{
+  display:flex;align-items:center;gap:12px;height:34px;
+}
+.sample-tweet-actions-under-avatar{
+  width:40px;height:34px;flex:none;display:flex;align-items:center;justify-content:center;
+}
+.sample-tweet-actions{
+  position:relative;flex:1;min-width:0;height:34px;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:2px;color:#71767b;flex-wrap:nowrap;
+}
+.sample-block-btn-end{
+  position:absolute;right:0;top:50%;transform:translateY(-50%);
+}
+.sample-action{
+  display:inline-flex;align-items:center;gap:6px;font-size:13px;min-width:0;
+}
+.sample-action-icon{min-width:34px;justify-content:center}
+.sample-action svg{width:18px;height:18px;flex:none}
+.sample-tweet[data-position="header-grok-before"] .sample-block-btn-grok-before{display:grid}
+.sample-tweet[data-position="header-grok"] .sample-block-btn-grok-after{display:grid}
+.sample-tweet[data-position="actions-under-avatar"] .sample-block-btn-under-avatar{display:grid}
+.sample-tweet[data-position="actions-end"] .sample-tweet-actions{padding-right:34px}
+.sample-tweet[data-position="actions-end"] .sample-block-btn-end{display:grid}
+.tweet-position-options{display:flex;flex-direction:column;gap:8px}
+.tweet-position-opt{
+  display:flex;flex-direction:column;align-items:flex-start;gap:3px;
+  width:100%;text-align:left;padding:12px 14px;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);
+  transition:border-color .14s,background .14s,box-shadow .14s;
+}
+.tweet-position-opt:hover{border-color:var(--border-2);background:var(--surface-hover)}
+.tweet-position-opt.on{border-color:var(--accent-line);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent-line)}
+.tweet-position-opt-name{font-weight:600;font-size:14px;color:var(--text)}
+.tweet-position-opt-desc{font-size:12.5px;color:var(--text-2);line-height:1.4}
+@media(max-width:720px){
+  .tweet-position-layout{grid-template-columns:1fr}
+}

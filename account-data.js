@@ -16,6 +16,13 @@ const DEFAULT_ACCOUNT_DATA = {
   queueRunHistory: []
 };
 
+const TWEET_BUTTON_POSITIONS = [
+  { id: 'header-grok-before', name: 'Before Grok', desc: 'Top-right of the tweet, immediately before the Grok button' },
+  { id: 'header-grok', name: 'After Grok', desc: 'Top-right of the tweet, immediately after the Grok button' },
+  { id: 'actions-under-avatar', name: 'Under avatar', desc: 'Below the avatar, aligned with the action buttons' },
+  { id: 'actions-end', name: 'End of action bar', desc: 'Far right of the reply, repost, and like row' }
+];
+
 const DEFAULT_SETTINGS = {
   action: 'block', // 'block' or 'mute'
   enabledPages: {
@@ -33,6 +40,7 @@ const DEFAULT_SETTINGS = {
     explore: true
   },
   showSettingsIcon: true,
+  tweetButtonPosition: 'header-grok',
   accounts: {},
   activeAccount: '_unassigned',
   detectedAccount: null,
@@ -330,6 +338,16 @@ function migrateSettings(settings, detectedHandle) {
 
   if (!migrated._migratedToAccounts) {
     migrated._migratedToAccounts = true;
+  }
+
+  if (!migrated.tweetButtonPosition) {
+    migrated.tweetButtonPosition = DEFAULT_SETTINGS.tweetButtonPosition;
+  }
+  if (
+    migrated.tweetButtonPosition === 'header' ||
+    !TWEET_BUTTON_POSITIONS.some((p) => p.id === migrated.tweetButtonPosition)
+  ) {
+    migrated.tweetButtonPosition = DEFAULT_SETTINGS.tweetButtonPosition;
   }
 
   if (handle) {
@@ -856,6 +874,7 @@ function switchActiveAccount(settings, handle) {
 const AccountData = {
   DEFAULT_ACCOUNT_DATA,
   DEFAULT_SETTINGS,
+  TWEET_BUTTON_POSITIONS,
   normalizeHandle,
   detectHandleFromPage,
   defaultAccountData,

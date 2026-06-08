@@ -143,6 +143,9 @@ class SettingsManager {
             if (newSettings.showSettingsIcon !== undefined) {
                 settings.showSettingsIcon = newSettings.showSettingsIcon;
             }
+            if (newSettings.tweetButtonPosition !== undefined) {
+                settings.tweetButtonPosition = newSettings.tweetButtonPosition;
+            }
 
             await AccountData.saveToChromeStorage(settings);
             this.settings = settings;

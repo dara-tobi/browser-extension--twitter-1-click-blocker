@@ -97,6 +97,7 @@ class OptionsManager {
     this.injectStaticIcons();
     this.initTheme();
     this.renderPageChips();
+    this.renderTweetPositionOptions();
     this.initializeUI();
     this.loadSettings();
   }
@@ -140,6 +141,53 @@ class OptionsManager {
     document.querySelectorAll('[data-check]').forEach(el => {
       el.innerHTML = icon('check', 13);
     });
+    document.querySelectorAll('[data-preview-icon]').forEach(el => {
+      el.innerHTML = icon(el.dataset.previewIcon, 18, '#71767b');
+    });
+  }
+
+  renderTweetPositionOptions(selectedPosition) {
+    const host = document.getElementById('tweet-position-options');
+    if (!host) return;
+    const positions = AccountData.TWEET_BUTTON_POSITIONS;
+    const current = (selectedPosition === 'header' || selectedPosition === 'actions-middle')
+      ? 'header-grok'
+      : (selectedPosition || 'header-grok');
+    host.innerHTML = positions.map((p) => `
+      <button type="button" class="tweet-position-opt${current === p.id ? ' on' : ''}" data-position="${p.id}" role="radio" aria-checked="${current === p.id}">
+        <span class="tweet-position-opt-name">${p.name}</span>
+        <span class="tweet-position-opt-desc">${p.desc}</span>
+      </button>
+    `).join('');
+    host.querySelectorAll('.tweet-position-opt').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.setTweetButtonPosition(btn.dataset.position);
+      });
+    });
+    this.updateTweetPositionPreview(current);
+  }
+
+  updateTweetPositionPreview(position) {
+    const preview = document.getElementById('sample-tweet-preview');
+    if (preview) {
+      preview.dataset.position = (position === 'header' || position === 'actions-middle')
+        ? 'header-grok'
+        : (position || 'header-grok');
+    }
+    document.querySelectorAll('.tweet-position-opt').forEach((btn) => {
+      const on = btn.dataset.position === position;
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  }
+
+  async setTweetButtonPosition(position) {
+    const valid = AccountData.TWEET_BUTTON_POSITIONS.some((p) => p.id === position);
+    if (!valid) return;
+    this.updateTweetPositionPreview(position);
+    await this.saveSettings({ tweetButtonPosition: position });
+    const label = AccountData.TWEET_BUTTON_POSITIONS.find((p) => p.id === position)?.name || position;
+    this.toast(`Button position: <b>${label}</b>`, { kind: 'accent', ttl: 1600 });
   }
 
   initTheme() {
@@ -353,6 +401,9 @@ class OptionsManager {
     if (!opts.skipUi) {
       this.updateUI(AccountData.resolveForActiveAccount(settings), settings);
     }
+    if (opts.quiet && !opts.skipUi) {
+      this.updateTweetPositionPreview(settings.tweetButtonPosition || 'header-grok');
+    }
   }
 
   async loadSettings() {
@@ -406,7 +457,7 @@ class OptionsManager {
     }
   }
 
-  async saveSettings() {
+  async saveSettings(overrides = {}) {
     if (!this.currentHandle) return;
     try {
       let settings = await this.readStoredSettings(this.currentHandle);
@@ -415,9 +466,17 @@ class OptionsManager {
       settings.action = activeSeg?.dataset.value || 'block';
       settings.enabledPages = this.getEnabledPagesFromDOM();
       settings.showSettingsIcon = document.getElementById('show-settings-icon').classList.contains('on');
+      if (overrides.tweetButtonPosition !== undefined) {
+        settings.tweetButtonPosition = overrides.tweetButtonPosition;
+      } else {
+        const selectedPosition = document.querySelector('.tweet-position-opt.on')?.dataset.position;
+        if (selectedPosition) settings.tweetButtonPosition = selectedPosition;
+      }
       settings = AccountData.setAccount(settings, settings.activeAccount, account);
-      await this.persistSettings(settings);
-      this.toast('Settings saved!', { kind: 'success', ttl: 1400 });
+      await this.persistSettings(settings, { quiet: !!overrides.tweetButtonPosition });
+      if (!overrides.tweetButtonPosition) {
+        this.toast('Settings saved!', { kind: 'success', ttl: 1400 });
+      }
     } catch (error) {
       console.error('Error saving settings:', error);
     }
@@ -447,6 +506,7 @@ class OptionsManager {
     this.updateActionSeg(settings.action);
 
     this.renderPageChips(settings.enabledPages);
+    this.renderTweetPositionOptions(settings.tweetButtonPosition || 'header-grok');
 
     const gearSwitch = document.getElementById('show-settings-icon');
     if (gearSwitch) gearSwitch.classList.toggle('on', settings.showSettingsIcon ?? true);
@@ -2346,6 +2406,7 @@ class OptionsManager {
         exportData.action = settings.action;
         exportData.enabledPages = settings.enabledPages;
         exportData.showSettingsIcon = settings.showSettingsIcon;
+        exportData.tweetButtonPosition = settings.tweetButtonPosition;
       }
 
       if (scope.blocks || scope.mutes) {
@@ -2406,6 +2467,7 @@ class OptionsManager {
         settings.action = importedData.action ?? settings.action;
         settings.enabledPages = importedData.enabledPages ?? settings.enabledPages;
         settings.showSettingsIcon = importedData.showSettingsIcon ?? settings.showSettingsIcon;
+        settings.tweetButtonPosition = importedData.tweetButtonPosition ?? settings.tweetButtonPosition;
       }
 
       account.stats = {
@@ -2433,6 +2495,7 @@ class OptionsManager {
         settings.action = AccountData.DEFAULT_SETTINGS.action;
         settings.enabledPages = { ...AccountData.DEFAULT_SETTINGS.enabledPages };
         settings.showSettingsIcon = true;
+        settings.tweetButtonPosition = AccountData.DEFAULT_SETTINGS.tweetButtonPosition;
       }
 
       account.stats = {

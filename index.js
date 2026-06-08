@@ -22,7 +22,10 @@ const CONFIG = {
     emptyStateHeader: '[data-testid="empty_state_header_text"]',
     followButton: '[data-testid*="-follow"]',
     tweet: '[data-testid="tweet"]',
-    hoverCard: '[data-testid="HoverCard"]'
+    hoverCard: '[data-testid="HoverCard"]',
+    tweetAvatar: '[data-testid="Tweet-User-Avatar"]',
+    retweet: '[data-testid="retweet"]',
+    reply: '[data-testid="reply"]'
   },
   classes: {
     blockButton: 'sw-block-button',
@@ -44,6 +47,24 @@ const CONFIG = {
     }
   }
 };
+
+function findGrokButton(root) {
+  if (!root?.querySelectorAll) return null;
+  const prefixMatch = root.querySelector(CONFIG.selectors.grokActions);
+  if (prefixMatch) return prefixMatch;
+  for (const btn of root.querySelectorAll('button[aria-label]')) {
+    if (/grok/i.test(btn.getAttribute('aria-label') || '')) {
+      return btn;
+    }
+  }
+  return null;
+}
+
+const grokBlockButtonAttachInProgress = new WeakSet();
+
+function articleHasGrokBlockButton(article) {
+  return !!article?.querySelector('.sw-block-button-before-grok, .sw-block-button-beside-grok');
+}
 
 class TwitterBlocker {
   constructor() {
@@ -161,6 +182,8 @@ class TwitterBlocker {
       subtree: true,
       attributes: false,
     });
+
+    void this.scanExistingTweetsForGrokButton();
   }
 
   async handleDOMMutation(mutation) {
@@ -298,14 +321,73 @@ class TwitterBlocker {
       const menuButton = wrapper.querySelector(CONFIG.selectors.menuCaret);
       this.attachActionButton(usernameDiv, menuButton);
     }
+    await this.tryAttachGrokButtonsInMutation(mutation);
+  }
+
+  mutationHasMenuCaret(mutation) {
+    for (const node of mutation.addedNodes) {
+      if (node.nodeType !== 1) continue;
+      if (node.matches?.('[data-testid="caret"]')) return true;
+      if (node.querySelector?.('[data-testid="caret"]')) return true;
+    }
+    return false;
+  }
+
+  collectArticlesFromMutation(mutation) {
+    const articles = new Set();
+    for (const node of mutation.addedNodes) {
+      if (node.nodeType !== 1) continue;
+      if (node.matches?.('[data-testid="tweet"]')) {
+        articles.add(node);
+      }
+      node.querySelectorAll?.('[data-testid="tweet"]')?.forEach((article) => {
+        articles.add(article);
+      });
+    }
+    if (mutation.target?.matches?.('[data-testid="tweet"]')) {
+      articles.add(mutation.target);
+    }
+    return articles;
+  }
+
+  async tryAttachGrokButtonsInMutation(mutation) {
+    const position = await this.getTweetButtonPosition();
+    if (position !== 'header-grok-before' && position !== 'header-grok') {
+      return;
+    }
+
+    for (const article of this.collectArticlesFromMutation(mutation)) {
+      const menuButton = article.querySelector(CONFIG.selectors.menuCaret);
+      const userNameDiv = article.querySelector(CONFIG.selectors.userName);
+      if (!menuButton || !userNameDiv || !findGrokButton(article)) {
+        continue;
+      }
+      await this.attachGrokPositionButton(article, menuButton, userNameDiv);
+    }
+  }
+
+  async scanExistingTweetsForGrokButton() {
+    if (this.getProfilePageInfo().isOwnProfilePage) return;
+    if (!await this.shouldShowButtonOnPage('timeline')) return;
+
+    const position = await this.getTweetButtonPosition();
+    if (position !== 'header-grok-before' && position !== 'header-grok') {
+      return;
+    }
+
+    for (const article of document.querySelectorAll('[data-testid="tweet"]')) {
+      const menuButton = article.querySelector(CONFIG.selectors.menuCaret);
+      const userNameDiv = article.querySelector(CONFIG.selectors.userName);
+      if (!menuButton || !userNameDiv || !findGrokButton(article)) {
+        continue;
+      }
+      await this.attachGrokPositionButton(article, menuButton, userNameDiv);
+    }
   }
 
   detectTweetUsernameWrapper(mutation) {
   let nodeOfInterest = null;
-    const mutationString = Array.from(mutation.addedNodes)
-      .map(node => node.outerHTML)
-      .join("");
-    const hasMenuCaret = mutationString.includes('data-testid="caret"');
+    const hasMenuCaret = this.mutationHasMenuCaret(mutation);
 
     if (hasMenuCaret) {
       mutation.addedNodes.forEach(node => {
@@ -579,15 +661,155 @@ class TwitterBlocker {
     });
   }
 
-  handleGrokButtonOverlap(mutation) {
-    const grokButton = mutation.target.querySelector(CONFIG.selectors.grokActions);
-    if (grokButton) {
-      const blockButton = grokButton.closest("article")
-        .querySelector(`.${CONFIG.classes.blockButtonWrapper}`);
-      if (blockButton) {
-        blockButton.style.right = "45px";
+  findGrokButtonInMutation(mutation) {
+    let found = findGrokButton(mutation.target);
+    if (found) return found;
+    for (const node of mutation.addedNodes) {
+      if (node.nodeType !== 1) continue;
+      found = findGrokButton(node);
+      if (found) return found;
+      if (
+        node.matches?.('button[aria-label]') &&
+        /grok/i.test(node.getAttribute('aria-label') || '')
+      ) {
+        return node;
       }
     }
+    return null;
+  }
+
+  async attachGrokPositionButton(article, menuOptionsButton, userNameDiv) {
+    if (!article) {
+      return false;
+    }
+    if (articleHasGrokBlockButton(article) || grokBlockButtonAttachInProgress.has(article)) {
+      return true;
+    }
+    grokBlockButtonAttachInProgress.add(article);
+
+    try {
+      const position = await this.getTweetButtonPosition();
+      if (position !== 'header-grok-before' && position !== 'header-grok') {
+        return false;
+      }
+      if (articleHasGrokBlockButton(article)) {
+        return true;
+      }
+
+      const grokBtn = findGrokButton(article);
+      const grokCell = grokBtn?.parentElement;
+      if (!grokCell) {
+        return false;
+      }
+
+      const tweetUsername = userNameDiv.querySelectorAll("[href]")?.[1]?.textContent;
+      if (!this.shouldAddActionButton(tweetUsername)) {
+        return true;
+      }
+
+      const action = await this.getCurrentAction();
+      if (articleHasGrokBlockButton(article)) {
+        return true;
+      }
+
+      const { bgColor, iconColor } = getThemeColors(menuOptionsButton);
+      const blockButton = new BlockButtonUI(bgColor, iconColor).createForBesideGrok(
+        tweetUsername,
+        action,
+        position === 'header-grok-before' ? 'before' : 'after'
+      );
+      this.addTweetActionButtonListeners(blockButton, menuOptionsButton);
+      if (position === 'header-grok-before') {
+        grokCell.insertAdjacentElement('beforebegin', blockButton);
+      } else {
+        grokCell.insertAdjacentElement('afterend', blockButton);
+      }
+      return true;
+    } finally {
+      grokBlockButtonAttachInProgress.delete(article);
+    }
+  }
+
+  handleGrokButtonOverlap(mutation) {
+    const grokButton = this.findGrokButtonInMutation(mutation);
+    if (!grokButton) return;
+
+    const article = grokButton.closest('article');
+    if (!article) return;
+
+    const blockButton = article.querySelector(
+      `.${CONFIG.classes.blockButtonWrapper}.sw-block-button-header-menu`
+    );
+    if (blockButton) {
+      blockButton.style.right = '45px';
+    }
+
+    const menuButton = article.querySelector(CONFIG.selectors.menuCaret);
+    const userNameDiv = article.querySelector(CONFIG.selectors.userName);
+    if (menuButton && userNameDiv) {
+      void this.attachGrokPositionButton(article, menuButton, userNameDiv);
+    }
+  }
+
+  getTweetActionGroup(article) {
+    const replyBtn = article?.querySelector(CONFIG.selectors.reply);
+    return replyBtn?.closest('[role="group"]') || null;
+  }
+
+  getTweetActionIconCenterY(article, articleTop) {
+    const icons = [CONFIG.selectors.reply, CONFIG.selectors.retweet]
+      .map((sel) => {
+        const btn = article.querySelector(sel);
+        return btn?.querySelector('svg') || btn;
+      })
+      .filter(Boolean);
+
+    if (!icons.length) return null;
+
+    let sum = 0;
+    for (const icon of icons) {
+      const rect = icon.getBoundingClientRect();
+      sum += rect.top + rect.height / 2 - articleTop;
+    }
+    return sum / icons.length;
+  }
+
+  positionUnderAvatarButton(article, blockButton) {
+    const avatar = article?.querySelector(CONFIG.selectors.tweetAvatar);
+    const replyBtn = article?.querySelector(CONFIG.selectors.reply);
+    if (!avatar || !replyBtn) return;
+
+    const place = () => {
+      const articleRect = article.getBoundingClientRect();
+      const avatarTarget = avatar.querySelector('img') || avatar;
+      const avatarRect = avatarTarget.getBoundingClientRect();
+      const centerY = this.getTweetActionIconCenterY(article, articleRect.top);
+
+      if (centerY == null) return;
+
+      blockButton.style.left = `${avatarRect.left + avatarRect.width / 2 - articleRect.left}px`;
+      blockButton.style.top = `${centerY}px`;
+
+      const replySvg = replyBtn.querySelector('svg');
+      const ourSvg = blockButton.querySelector(`.${CONFIG.classes.blockIcon}`);
+      if (!replySvg || !ourSvg) return;
+
+      const replyMid = replySvg.getBoundingClientRect().top + replySvg.getBoundingClientRect().height / 2;
+      const ourMid = ourSvg.getBoundingClientRect().top + ourSvg.getBoundingClientRect().height / 2;
+      const drift = ourMid - replyMid;
+      if (Math.abs(drift) > 0.5) {
+        const adjusted = centerY - drift;
+        blockButton.style.top = `${adjusted}px`;
+      }
+    };
+
+    place();
+
+    if (blockButton._swUnderAvatarObserver) return;
+
+    const observer = new ResizeObserver(() => place());
+    observer.observe(article);
+    blockButton._swUnderAvatarObserver = observer;
   }
 
   removeBlockedUser(username) {
@@ -611,6 +833,14 @@ class TwitterBlocker {
     await this.syncLoggedInAccount();
     const settings = this.settingsManager.getSettings();
     return settings.action || 'block';
+  }
+
+  async getTweetButtonPosition() {
+    await this.syncLoggedInAccount();
+    const settings = this.settingsManager.getSettings();
+    const position = settings.tweetButtonPosition || 'header-grok';
+    if (position === 'header' || position === 'actions-middle') return 'header-grok';
+    return position;
   }
 
   getPageType() {
@@ -691,10 +921,9 @@ class TwitterBlocker {
       return;
     }
 
+    const article = menuOptionsButton.closest('article');
+    const position = await this.getTweetButtonPosition();
     const menuOptionsWrapper = menuOptionsButton.parentElement;
-    if (menuOptionsWrapper?.querySelector(`.${CONFIG.classes.blockButtonWrapper}`)) {
-      return;
-    }
 
     const tweetUsername = userNameDiv.querySelectorAll("[href]")?.[1]?.textContent;
 
@@ -704,15 +933,62 @@ class TwitterBlocker {
 
     const action = await this.getCurrentAction();
     const { bgColor, iconColor } = getThemeColors(menuOptionsButton);
-    const blockButton = new BlockButtonUI(bgColor, iconColor)
-      .create(tweetUsername, menuOptionsButton, action);
-    
-    this.addTweetActionButtonListeners(blockButton);
-    
+    const blockButtonUI = new BlockButtonUI(bgColor, iconColor);
+
+    if (position === 'header-grok-before' || position === 'header-grok') {
+      await this.attachGrokPositionButton(article, menuOptionsButton, userNameDiv);
+      return;
+    }
+
+    if (position === 'actions-under-avatar') {
+      if (article?.querySelector('.sw-block-button-under-avatar')) {
+        return;
+      }
+      const avatar = article?.querySelector(CONFIG.selectors.tweetAvatar);
+      const replyBtn = article?.querySelector(CONFIG.selectors.reply);
+      if (!avatar || !replyBtn) return;
+
+      const blockButton = blockButtonUI.createForUnderAvatar(tweetUsername, action);
+      this.addTweetActionButtonListeners(blockButton, menuOptionsButton);
+
+      if (getComputedStyle(article).position === 'static') {
+        article.style.position = 'relative';
+      }
+      article.appendChild(blockButton);
+      this.positionUnderAvatarButton(article, blockButton);
+      return;
+    }
+
+    if (position === 'actions-middle' || position === 'actions-end') {
+      const actionGroup = this.getTweetActionGroup(article);
+      if (!actionGroup || actionGroup.querySelector('.sw-block-button-action-bar')) {
+        return;
+      }
+
+      const blockButton = blockButtonUI.createForActionBar(tweetUsername, action);
+      this.addTweetActionButtonListeners(blockButton, menuOptionsButton);
+
+      if (position === 'actions-middle') {
+        const retweetBtn = actionGroup.querySelector(CONFIG.selectors.retweet);
+        if (!retweetBtn?.parentElement) return;
+        retweetBtn.parentElement.insertAdjacentElement('afterend', blockButton);
+      } else {
+        actionGroup.appendChild(blockButton);
+      }
+      return;
+    }
+
+    if (menuOptionsWrapper?.querySelector(`.${CONFIG.classes.blockButtonWrapper}`)) {
+      return;
+    }
+
+    const blockButton = blockButtonUI.create(tweetUsername, menuOptionsButton, action);
+
+    this.addTweetActionButtonListeners(blockButton, menuOptionsButton);
+
     menuOptionsWrapper.insertBefore(blockButton, menuOptionsButton);
 
-    const grokButton = menuOptionsWrapper.closest('article')
-      .querySelector(CONFIG.selectors.grokActions);
+    const grokButton = findGrokButton(menuOptionsWrapper.closest('article'));
     if (grokButton) {
       blockButton.style.right = '45px';
     }
@@ -724,11 +1000,10 @@ class TwitterBlocker {
     return tweetUsername.replace(/^@/, '').toLowerCase() !== ownHandle;
   }
 
-  addTweetActionButtonListeners(actionButton) {
+  addTweetActionButtonListeners(actionButton, menuOptionsButton) {
     actionButton.addEventListener("click", async (e) => {
       this.usernameToAction = actionButton.dataset.username;
       e.stopPropagation();
-      const menuOptionsButton = actionButton.parentElement?.querySelector(CONFIG.selectors.menuCaret);
       if (!menuOptionsButton) return;
       this.triggerMenuClick(menuOptionsButton);
       await this.triggerMenuOptionClick();
@@ -1246,6 +1521,7 @@ class BlockButtonUI {
 
   create(tweetUsername, menuOptionsButton, action = 'block') {
     const wrapper = this.createWrapper(menuOptionsButton);
+    wrapper.classList.add('sw-block-button-header-menu');
     const blockButton = this.createButton(action);
     const background = this.createBackground();
 
@@ -1259,9 +1535,117 @@ class BlockButtonUI {
     return wrapper;
   }
 
+  createForBesideGrok(tweetUsername, action = 'block', placement = 'after') {
+    const wrapper = document.createElement('div');
+    wrapper.classList.add(
+      CONFIG.classes.blockButtonWrapper,
+      placement === 'before' ? 'sw-block-button-before-grok' : 'sw-block-button-beside-grok'
+    );
+    wrapper.dataset.username = tweetUsername;
+    wrapper.dataset.action = action;
+
+    const blockButton = this.createButton(action);
+    const background = this.createBackground();
+
+    Object.assign(wrapper.style, {
+      display: 'grid',
+      position: 'relative',
+      borderRadius: '100%',
+      placeItems: 'center',
+      gridTemplateAreas: '"icon"',
+      gridTemplateColumns: '1fr',
+      flexShrink: '0',
+      marginRight: '2px'
+    });
+
+    wrapper.appendChild(background);
+    wrapper.appendChild(blockButton);
+    this.addHoverEffects(blockButton, background, action);
+
+    return wrapper;
+  }
+
+  createForUnderAvatar(tweetUsername, action = 'block') {
+    const wrapper = document.createElement('div');
+    wrapper.classList.add(CONFIG.classes.blockButtonWrapper, 'sw-block-button-under-avatar');
+    wrapper.dataset.username = tweetUsername;
+    wrapper.dataset.action = action;
+
+    const blockButton = this.createButton(action);
+    const background = this.createBackground();
+    const icon = blockButton.querySelector(`.${CONFIG.classes.blockIcon}`);
+
+    Object.assign(wrapper.style, {
+      display: 'grid',
+      placeItems: 'center',
+      gridTemplateAreas: '"icon"',
+      gridTemplateColumns: '1fr',
+      position: 'absolute',
+      width: '34px',
+      height: '34px',
+      margin: '0',
+      padding: '0',
+      border: 'none',
+      background: 'transparent',
+      cursor: 'pointer',
+      zIndex: '1',
+      pointerEvents: 'auto',
+      transform: 'translate(-50%, -50%)'
+    });
+
+    Object.assign(background.style, {
+      height: '34px',
+      width: '34px'
+    });
+
+    if (icon) {
+      icon.setAttribute('width', '18');
+      icon.setAttribute('height', '18');
+    }
+
+    wrapper.appendChild(background);
+    wrapper.appendChild(blockButton);
+    this.addHoverEffects(blockButton, background, action);
+
+    return wrapper;
+  }
+
+  createForActionBar(tweetUsername, action = 'block') {
+    const wrapper = document.createElement('div');
+    wrapper.classList.add(CONFIG.classes.blockButtonWrapper, 'sw-block-button-action-bar');
+    wrapper.dataset.username = tweetUsername;
+    wrapper.dataset.action = action;
+
+    const blockButton = this.createButton(action);
+    const background = this.createBackground();
+
+    Object.assign(wrapper.style, {
+      display: 'grid',
+      placeItems: 'center',
+      gridTemplateAreas: '"icon"',
+      gridTemplateColumns: '1fr',
+      position: 'relative',
+      cursor: 'pointer',
+      margin: '0',
+      padding: '0',
+      border: 'none',
+      background: 'transparent'
+    });
+
+    Object.assign(background.style, {
+      height: '34px',
+      width: '34px'
+    });
+
+    wrapper.appendChild(background);
+    wrapper.appendChild(blockButton);
+    this.addHoverEffects(blockButton, background, action);
+
+    return wrapper;
+  }
+
   createWrapper(menuOptionsButton) {
-    const grokButton = menuOptionsButton.closest("article")
-      .querySelector(CONFIG.selectors.grokActions);
+    const grokButton = findGrokButton(menuOptionsButton.closest("article"));
 
     const wrapper = document.createElement("div");
     wrapper.classList.add(CONFIG.classes.blockButtonWrapper);
