@@ -1,7 +1,5 @@
 importScripts('account-data.js');
 
-// chrome.runtime.setUninstallURL('https://docs.google.com/forms/d/15hOeb2GIHZXcwa8HeiVIIEAqe8gntzGyYLZS5XXTZSE');
-
 const QUEUE_STORAGE_KEYS = [
   'toBlockQueueRunning',
   'toBlockQueueAction',
@@ -29,6 +27,9 @@ async function clearQueueRuntimeState() {
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     void clearQueueRuntimeState();
+  }
+  if (details.reason === 'install' || details.reason === 'update') {
+    chrome.runtime.openOptionsPage();
   }
 });
 

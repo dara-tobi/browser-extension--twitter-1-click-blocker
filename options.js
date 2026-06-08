@@ -99,6 +99,7 @@ class OptionsManager {
     this.renderPageChips();
     this.renderTweetPositionOptions();
     this.initializeUI();
+    this.updateAccountSectionsVisibility();
     this.loadSettings();
   }
 
@@ -440,6 +441,7 @@ class OptionsManager {
       const handle = await this.resolveStoredHandle();
       if (!handle) {
         this.currentHandle = null;
+        this.updateAccountSectionsVisibility();
         return;
       }
       this.currentHandle = handle;
@@ -452,9 +454,9 @@ class OptionsManager {
       this.switchTab(this.currentTab, { skipDataRefresh: true });
       void this.syncQueueRunUiFromStorage();
     } catch (error) {
-      console.error('Error loading settings:', error);
       this.currentHandle = null;
     }
+    this.updateAccountSectionsVisibility();
   }
 
   async saveSettings(overrides = {}) {
@@ -554,6 +556,14 @@ class OptionsManager {
       const clean = input.value.trim().replace(/^@/, '');
       saveBtn.disabled = clean === handle;
     }
+  }
+
+  updateAccountSectionsVisibility() {
+    const hasHandle = !!this.currentHandle;
+    const accountSection = document.getElementById('twitter-account-section');
+    if (accountSection) accountSection.hidden = !hasHandle;
+    const navFootTools = document.querySelector('.nav-foot-tools');
+    if (navFootTools) navFootTools.hidden = !hasHandle;
   }
 
   updateNavQueueCount(count) {

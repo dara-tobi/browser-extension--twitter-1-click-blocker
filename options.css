@@ -531,6 +531,8 @@ h1,h2,h3,h4{font-family:var(--font-display);font-weight:600;letter-spacing:-.02e
 .storage-debug-section-title:first-child{margin-top:0}
 .storage-debug-meta{color:var(--text-2);font-size:12px;margin-bottom:12px}
 .nav-foot-tools{display:flex;gap:6px;align-items:center}
+.nav-foot-tools[hidden]{display:none!important}
+#twitter-account-section[hidden]{display:none!important}
 .nav-foot-tools .btn-icon{margin-left:auto}
 #page-count-title .muted{font-weight:500;font-size:14px}
 
