@@ -351,12 +351,10 @@ class TwitterBlocker {
   }
 
   async tryAttachGrokButtonsInMutation(mutation) {
-    const position = await this.getTweetButtonPosition();
-    if (position !== 'header-grok-before' && position !== 'header-grok') {
-      return;
-    }
-
     for (const article of this.collectArticlesFromMutation(mutation)) {
+      if (!(await this.getGrokPlacementForArticle(article))) {
+        continue;
+      }
       const menuButton = article.querySelector(CONFIG.selectors.menuCaret);
       const userNameDiv = article.querySelector(CONFIG.selectors.userName);
       if (!menuButton || !userNameDiv || !findGrokButton(article)) {
@@ -370,12 +368,10 @@ class TwitterBlocker {
     if (this.getProfilePageInfo().isOwnProfilePage) return;
     if (!await this.shouldShowButtonOnPage('timeline')) return;
 
-    const position = await this.getTweetButtonPosition();
-    if (position !== 'header-grok-before' && position !== 'header-grok') {
-      return;
-    }
-
     for (const article of document.querySelectorAll('[data-testid="tweet"]')) {
+      if (!(await this.getGrokPlacementForArticle(article))) {
+        continue;
+      }
       const menuButton = article.querySelector(CONFIG.selectors.menuCaret);
       const userNameDiv = article.querySelector(CONFIG.selectors.userName);
       if (!menuButton || !userNameDiv || !findGrokButton(article)) {
@@ -688,8 +684,8 @@ class TwitterBlocker {
     grokBlockButtonAttachInProgress.add(article);
 
     try {
-      const position = await this.getTweetButtonPosition();
-      if (position !== 'header-grok-before' && position !== 'header-grok') {
+      const placement = await this.getGrokPlacementForArticle(article);
+      if (!placement) {
         return false;
       }
       if (articleHasGrokBlockButton(article)) {
@@ -716,10 +712,10 @@ class TwitterBlocker {
       const blockButton = new BlockButtonUI(bgColor, iconColor).createForBesideGrok(
         tweetUsername,
         action,
-        position === 'header-grok-before' ? 'before' : 'after'
+        placement
       );
       this.addTweetActionButtonListeners(blockButton, menuOptionsButton);
-      if (position === 'header-grok-before') {
+      if (placement === 'before') {
         grokCell.insertAdjacentElement('beforebegin', blockButton);
       } else {
         grokCell.insertAdjacentElement('afterend', blockButton);
@@ -774,15 +770,39 @@ class TwitterBlocker {
     return sum / icons.length;
   }
 
+  isFocusTweetOnStatusPage(article) {
+    const statusMatch = window.location.pathname.match(/\/status\/(\d+)/);
+    if (!statusMatch) return false;
+    return !!article?.querySelector(`a[href*="/status/${statusMatch[1]}"]`);
+  }
+
+  async getGrokPlacementForArticle(article) {
+    const position = await this.getTweetButtonPosition();
+    if (position === 'header-grok-before') return 'before';
+    if (position === 'header-grok-after') return 'after';
+    if (position === 'actions-under-avatar' && this.isFocusTweetOnStatusPage(article)) return 'before';
+    return null;
+  }
+
   positionUnderAvatarButton(article, blockButton) {
     const avatar = article?.querySelector(CONFIG.selectors.tweetAvatar);
     const replyBtn = article?.querySelector(CONFIG.selectors.reply);
     if (!avatar || !replyBtn) return;
 
+    const isFocusTweet = this.isFocusTweetOnStatusPage(article);
+
     const place = () => {
       const articleRect = article.getBoundingClientRect();
       const avatarTarget = avatar.querySelector('img') || avatar;
       const avatarRect = avatarTarget.getBoundingClientRect();
+
+      if (isFocusTweet) {
+        const gap = 4;
+        blockButton.style.left = `${avatarRect.left - articleRect.left - blockButton.offsetWidth / 2 - gap}px`;
+        blockButton.style.top = `${avatarRect.top + avatarRect.height / 2 - articleRect.top}px`;
+        return;
+      }
+
       const centerY = this.getTweetActionIconCenterY(article, articleRect.top);
 
       if (centerY == null) return;
@@ -838,8 +858,8 @@ class TwitterBlocker {
   async getTweetButtonPosition() {
     await this.syncLoggedInAccount();
     const settings = this.settingsManager.getSettings();
-    const position = settings.tweetButtonPosition || 'header-grok';
-    if (position === 'header' || position === 'actions-middle') return 'header-grok';
+    const position = settings.tweetButtonPosition || 'header-grok-before';
+    if (position === 'header' || position === 'actions-middle') return 'header-grok-before';
     return position;
   }
 
@@ -935,12 +955,16 @@ class TwitterBlocker {
     const { bgColor, iconColor } = getThemeColors(menuOptionsButton);
     const blockButtonUI = new BlockButtonUI(bgColor, iconColor);
 
-    if (position === 'header-grok-before' || position === 'header-grok') {
+    if (position === 'header-grok-before' || position === 'header-grok-after') {
       await this.attachGrokPositionButton(article, menuOptionsButton, userNameDiv);
       return;
     }
 
     if (position === 'actions-under-avatar') {
+      if (this.isFocusTweetOnStatusPage(article)) {
+        await this.attachGrokPositionButton(article, menuOptionsButton, userNameDiv);
+        return;
+      }
       if (article?.querySelector('.sw-block-button-under-avatar')) {
         return;
       }

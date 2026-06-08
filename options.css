@@ -601,7 +601,7 @@ h1,h2,h3,h4{font-family:var(--font-display);font-weight:600;letter-spacing:-.02e
 .sample-action-icon{min-width:34px;justify-content:center}
 .sample-action svg{width:18px;height:18px;flex:none}
 .sample-tweet[data-position="header-grok-before"] .sample-block-btn-grok-before{display:grid}
-.sample-tweet[data-position="header-grok"] .sample-block-btn-grok-after{display:grid}
+.sample-tweet[data-position="header-grok-after"] .sample-block-btn-grok-after{display:grid}
 .sample-tweet[data-position="actions-under-avatar"] .sample-block-btn-under-avatar{display:grid}
 .sample-tweet[data-position="actions-end"] .sample-tweet-actions{padding-right:34px}
 .sample-tweet[data-position="actions-end"] .sample-block-btn-end{display:grid}

@@ -18,8 +18,8 @@ const DEFAULT_ACCOUNT_DATA = {
 
 const TWEET_BUTTON_POSITIONS = [
   { id: 'header-grok-before', name: 'Before Grok', desc: 'Top-right of the tweet, immediately before the Grok button' },
-  { id: 'header-grok', name: 'After Grok', desc: 'Top-right of the tweet, immediately after the Grok button' },
-  { id: 'actions-under-avatar', name: 'Under avatar', desc: 'Below the avatar, aligned with the action buttons' },
+  { id: 'header-grok-after', name: 'After Grok', desc: 'Top-right of the tweet, immediately after the Grok button' },
+  { id: 'actions-under-avatar', name: 'Before action bar', desc: 'Immediately before the reply, repost, and like row' },
   { id: 'actions-end', name: 'End of action bar', desc: 'Far right of the reply, repost, and like row' }
 ];
 
@@ -40,7 +40,7 @@ const DEFAULT_SETTINGS = {
     explore: true
   },
   showSettingsIcon: true,
-  tweetButtonPosition: 'header-grok',
+  tweetButtonPosition: 'header-grok-before',
   accounts: {},
   activeAccount: '_unassigned',
   detectedAccount: null,
@@ -342,6 +342,9 @@ function migrateSettings(settings, detectedHandle) {
 
   if (!migrated.tweetButtonPosition) {
     migrated.tweetButtonPosition = DEFAULT_SETTINGS.tweetButtonPosition;
+  }
+  if (migrated.tweetButtonPosition === 'header-grok') {
+    migrated.tweetButtonPosition = 'header-grok-after';
   }
   if (
     migrated.tweetButtonPosition === 'header' ||

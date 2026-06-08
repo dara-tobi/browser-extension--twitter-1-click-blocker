@@ -151,8 +151,8 @@ class OptionsManager {
     if (!host) return;
     const positions = AccountData.TWEET_BUTTON_POSITIONS;
     const current = (selectedPosition === 'header' || selectedPosition === 'actions-middle')
-      ? 'header-grok'
-      : (selectedPosition || 'header-grok');
+      ? 'header-grok-before'
+      : (selectedPosition || 'header-grok-before');
     host.innerHTML = positions.map((p) => `
       <button type="button" class="tweet-position-opt${current === p.id ? ' on' : ''}" data-position="${p.id}" role="radio" aria-checked="${current === p.id}">
         <span class="tweet-position-opt-name">${p.name}</span>
@@ -171,8 +171,8 @@ class OptionsManager {
     const preview = document.getElementById('sample-tweet-preview');
     if (preview) {
       preview.dataset.position = (position === 'header' || position === 'actions-middle')
-        ? 'header-grok'
-        : (position || 'header-grok');
+        ? 'header-grok-before'
+        : (position || 'header-grok-before');
     }
     document.querySelectorAll('.tweet-position-opt').forEach((btn) => {
       const on = btn.dataset.position === position;
@@ -402,7 +402,7 @@ class OptionsManager {
       this.updateUI(AccountData.resolveForActiveAccount(settings), settings);
     }
     if (opts.quiet && !opts.skipUi) {
-      this.updateTweetPositionPreview(settings.tweetButtonPosition || 'header-grok');
+      this.updateTweetPositionPreview(settings.tweetButtonPosition || 'header-grok-before');
     }
   }
 
@@ -506,7 +506,7 @@ class OptionsManager {
     this.updateActionSeg(settings.action);
 
     this.renderPageChips(settings.enabledPages);
-    this.renderTweetPositionOptions(settings.tweetButtonPosition || 'header-grok');
+    this.renderTweetPositionOptions(settings.tweetButtonPosition || 'header-grok-before');
 
     const gearSwitch = document.getElementById('show-settings-icon');
     if (gearSwitch) gearSwitch.classList.toggle('on', settings.showSettingsIcon ?? true);
